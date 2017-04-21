@@ -39,12 +39,12 @@ docker pull mritd/shadowsocks
 
 ### Server 端
 
-`docker run -dt --name ss -p 6443:6443 -p 6500:6500/udp mritd/shadowsocks -s "-s :: -s 0.0.0.0 -p 6443 -m aes-256-cfb -k test123 --fast-open" -k "-t 127.0.0.1:6443 -l :6500 -mode fast2" -x`
+`docker run -dt --name ss --restart=always -p 8688:8688 -p 8689:8689 mritd/shadowsocks -s "-s :: -s 0.0.0.0 -p 8688 -m aes-256-cfb -k test123 --fast-open" -k "-t 127.0.0.1:8688 -l :8689 -mode fast2" -x`
 
 以上命令相当于执行了
 
 `ss-server -s :: -s 0.0.0.0 -p 6443 -m aes-256-cfb -k test123 --fast-open
-kcptun -t 127.0.0.1:6443 -l :6500 -mode fast2`
+kcptun -t 127.0.0.1:8688 -l :8689 -mode fast2`
 
 ### Client 端
 
