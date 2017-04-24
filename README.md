@@ -11,6 +11,10 @@
 
 ## 软件安装
 
+[openldap](20-openldap.md)
+
+[gitlab](20-gitlab.md)
+
 ## 技术文档
 
 ## 代码分析
