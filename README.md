@@ -15,6 +15,8 @@
 
 [gitlab](20-gitlab.md)
 
+[ceph](20-ceph.md)
+
 ## 技术文档
 
 ## 代码分析
