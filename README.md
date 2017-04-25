@@ -17,9 +17,31 @@
 
 [ceph](20-ceph.md)
 
+[TiDB和CrDB编译安装](20-TidbCrdbInstall.md)
+
+[docker swarm 搭建tidb和crdb](20-TidbCrdbOnDocker.md)
+
+[BDRT 编译安装](20-BdrtInstall.md)
+
 ## 技术文档
 
+### 原创
+
+### 收集
+
+[分布式SQL数据库](32-DistributedSQLTransation.md)
+
+### 翻译
+
+[Cockroach Design 翻译](33-CockroachDesign.md)
+
 ## 代码分析
+
+[CockroachDB源代码结构分析](40-CrdbCode.md)
+
+[BDRT 源代码结构分析](40-BdrtCode.md)
+
+
 
 ## 软件分析和评介
 
