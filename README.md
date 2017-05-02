@@ -35,9 +35,13 @@
 
 [分布式SQL数据库](32-DistributedSQLTransation.md)
 
+[Tidb技术](32-TidbTech .md)
+
 ### 翻译
 
 [Cockroach Design 翻译](33-CockroachDesign.md)
+
+[CockroachDB中的SQL-将表数据映射为key-value存储](33-sql-in-cockroachdb.md)
 
 ## 代码分析
 
