@@ -17,11 +17,15 @@
 
 [ceph](20-ceph.md)
 
+[kubernetes](20-kubernetesInstall.md)
+
 [TiDB和CrDB编译安装](20-TidbCrdbInstall.md)
 
 [docker swarm 搭建tidb和crdb](20-TidbCrdbOnDocker.md)
 
 [BDRT 编译安装](20-BdrtInstall.md)
+
+[Solr JDBC](20-solrJDBC.md)
 
 ## 技术文档
 
@@ -44,4 +48,6 @@
 
 
 ## 软件分析和评介
+
+
 
