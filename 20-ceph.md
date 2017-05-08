@@ -120,6 +120,9 @@ sudo firewall-cmd --list-all --permanent
 sudo firewall-cmd --zone=public --add-service=ceph-mon --permanent
 sudo firewall-cmd --zone=public --add-service=ceph --permanent
 sudo firewall-cmd --zone=public --add-port=80/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=8080/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=5000/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=27017/tcp --permanent
 sudo firewall-cmd --reload
 ```
 
@@ -314,7 +317,7 @@ MDS:
 
 `ceph-deploy mds create   ceph-admin`
 
-RGW:
+CEPH对象网关RGW:
 
 By default, the RGW instance will listen on port 7480
 
@@ -395,3 +398,365 @@ sudo mount -t ceph 192.168.0.1:6789:/ /mnt/mycephfs -o name=admin,secret=xxxx
 sudo ceph-fuse -k ./ceph.client.admin.keyring -m 192.168.0.1:6789 ~/mycephfs
 或者将配置文件和key拷贝到/etc/ceph目录下。
 ```
+
+
+## web ui
+
+### 方案对比
+
+[ceph 原生的calamari server](https://github.com/ceph/calamari)
+
+[calamari client-romana](https://github.com/ceph/romana)
+
+选择更轻量级的[inkscope](https://github.com/inkscope/inkscope)
+
+### inkscope安装
+[安装文档](https://github.com/inkscope/inkscope/wiki/Inkscope-installation-(V1.1))
+
+* sysprobe：所有相关节点都需要安装。
+* inkscope-admviz : 包含inkscope的web控制台文件，含接口和界面，仅需要安装一个，该节点（管理节点）上同时需要按安装flask和mongodb
+* inkscope-cephrestapi: 用于安装启动 ceph rest api 的脚本，仅需要安装在提供api接口的节点上，即mon节点。
+* inkscope-cephprobe: 用于安装启动 cephprobe 的脚本(整个集群只需一个)，安装在mon节点，脚本主要实现：获取Ceph集群的一些信息，并使用端口（5000）提供服务，将数据存入mongodb数据库中。
+
+下载安装包创建本地仓库：
+https://github.com/inkscope/inkscope-packaging
+
+```
+su - cephuser
+mkdir inkscope_repo
+```
+
+拷贝rpm文件到此目录。
+
+```
+sudo chown -R root.root inkscope_repo
+sudo yum install createrepo
+sudo createrepo /home/cephuser/inkscope_repo
+sudo chmod -R o-w+r /home/cephuser/inkscope_repo
+```
+`sudo vim /etc/yum.repos.d/inkscope.repo`
+```
+[inkScope local]
+name=My inkScope Repo
+baseurl=file:///home/cephuser/inkscope_repo
+enabled=1
+gpgcheck=0
+```
+`sudo yum makecache`
+
+on admin server:
+```
+yum install inkscope-cephrestapi
+yum install inkscope-cephprobe
+yum install inkscope-sysprobe
+yum install inkscope-admviz
+yum install mongodb mongodb-server python-pip python-devel
+pip install Flask-Login==0.3.2
+```
+edit /etc/mongod.conf
+```
+bind_ip = 0.0.0.0
+port = 27017
+```
+systemctl  enable mongod
+systemctl start mongod
+`radosgw-admin user create --uid=inkscope --display-name="inkscope" --access-key=inkscope --secret=inkscope --access=full --caps="metadata=*;users=*;buckets=*"`
+
+edit  /opt/inkscope/etc/inkscope.conf
+```
+{
+    "ceph_conf": "/etc/ceph/ceph.conf",
+    "ceph_rest_api": "172.16.210.121:5000",
+    "ceph_rest_api_subfolder": "",
+    "mongodb_host" : "ceph-admin",
+    "mongodb_set" : "mongodb0:27017,mongodb1:27017,mongodb2:27017",
+    "mongodb_replicaSet" : "replmongo0",
+    "mongodb_read_preference" : "ReadPreference.SECONDARY_PREFERRED",
+    "mongodb_port" : 27017,
+    "mongodb_user":"ceph",
+    "mongodb_passwd":"monpassword",
+    "is_mongo_authenticate" : 0,
+    "is_mongo_replicat" : 0,
+    "influxdb_endpoint":"http://influxdb_host:influxdb_port",
+    "cluster": "ceph",
+    "platform": "x86_64",
+    "status_refresh": 3,
+    "osd_dump_refresh": 3,
+    "pg_dump_refresh": 60,
+    "crushmap_refresh": 60,
+    "df_refresh": 60,
+    "cluster_window": 1200,
+    "osd_window": 1200,
+    "pool_window": 1200,
+    "mem_refresh": 60,
+    "swap_refresh": 600,
+    "disk_refresh": 60,
+    "partition_refresh": 60,
+    "cpu_refresh": 30,
+    "net_refresh": 30,
+    "mem_window": 1200,
+    "swap_window": 3600,
+    "disk_window": 1200,
+    "partition_window": 1200,
+    "cpu_window": 1200,
+    "net_window": 1200,
+    "inkscope_root" : "172.16.210.121:8080",
+    "radosgw_url": "http://172.16.210.121:7480",
+    "radosgw_admin": "admin",
+    "radosgw_key": "inkscopexxxx",
+    "radosgw_secret": "inkscopexxxx"
+}
+```
+edit /etc/httpd/conf/httpd.conf
+```
+Listen 8080
+NameVirtualHost *.8080
+```
+edit  /etc/httpd/conf.d/inkScope.conf
+```
+Directory "/var/www/inkscope
+ProxyPass /ceph-rest-api/ http://172.16.210.121:5000/api/v0.1/
+systemctl restart httpd
+```
+[参考文档](http://inkscope.blogspot.hk/2015/03/inkscope-and-ceph-rest-api.html)
+参考配置文件：
+
+```
+<VirtualHost *:8080>
+ServerName localhost
+ServerAdmin webmaster@localhost
+
+DocumentRoot /var/www/inkscope
+<Directory "/var/www/inkscope">
+    Options All
+    AllowOverride All
+</Directory>
+
+ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
+<Directory "/usr/lib/cgi-bin">
+    AllowOverride None
+    Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+    Order allow,deny
+    Allow from all
+</Directory>
+
+WSGIScriptAlias /inkscopeCtrl /var/www/inkscope/inkscopeCtrl/inkscopeCtrl.wsgi
+<Directory "/var/www/inkscope/inkscopeCtrl">
+    Order allow,deny
+    Allow from all
+</Directory>
+
+WSGIScriptAlias /ceph_rest_api /var/www/inkscope/inkscopeCtrl/ceph-rest-api.wsgi
+<Directory "/var/www/inkscope/inkscopeCtrl">
+     Require all granted
+</Directory>
+
+# Possible values include: debug, info, notice, warn, error, crit,
+# alert, emerg.
+LogLevel warn
+
+ProxyRequests Off  # we want  a "Reverse proxy"
+
+# For a ceph_rest_api in wsgi mode
+ProxyPass /ceph-rest-api/ http://debianhost.engba.veritas.com:8080/ceph_rest_api/api/v0.1/
+
+# For a standalone ceph_rest_api, uncomment the next line and comment the previous one
+# ProxyPass /ceph-rest-api/ http://<ceph_rest_api_host>:5000/api/v0.1/
+
+ErrorLog /var/log/inkscope/webserver_error.log
+CustomLog /var/log/inkscope/webserver_access.log common
+```
+```
+cat /opt/inkscope/etc/inkscope.conf
+{
+    "ceph_conf": "/etc/ceph/ceph.conf",
+    "ceph_rest_api": "172.16.210.121:5000",
+    "ceph_rest_api_subfolder": "",
+    "mongodb_host" : "ceph-admin",
+    "mongodb_set" : "mongodb0:27017,mongodb1:27017,mongodb2:27017",
+    "mongodb_replicaSet" : "replmongo0",
+    "mongodb_read_preference" : "ReadPreference.SECONDARY_PREFERRED",
+    "mongodb_port" : 27017,
+    "mongodb_user":"ceph",
+    "mongodb_passwd":"monpassword",
+    "is_mongo_authenticate" : 0,
+    "is_mongo_replicat" : 0,
+    "influxdb_endpoint":"http://172.16.210.121:8086",
+    "cluster": "ceph",
+    "platform": "x86_64",
+    "status_refresh": 3,
+    "osd_dump_refresh": 3,
+    "pg_dump_refresh": 60,
+    "crushmap_refresh": 60,
+    "df_refresh": 60,
+    "cluster_window": 1200,
+    "osd_window": 1200,
+    "pool_window": 1200,
+    "mem_refresh": 60,
+    "swap_refresh": 600,
+    "disk_refresh": 60,
+    "partition_refresh": 60,
+    "cpu_refresh": 30,
+    "net_refresh": 30,
+    "mem_window": 1200,
+    "swap_window": 3600,
+    "disk_window": 1200,
+    "partition_window": 1200,
+    "cpu_window": 1200,
+    "net_window": 1200,
+    "inkscope_root" : "172.16.210.121:8080",
+    "radosgw_url": "http://172.16.210.121:7480",
+    "radosgw_admin": "admin",
+    "radosgw_key": "inkscopexxxx",
+    "radosgw_secret": "inkscopexxxx"
+}
+```
+
+打开浏览器访问：http://172.16.210.121:8080，可看到Inscope首页信息了，不过此时没有Ceph集群的信息。
+```
+On the first launch, two users are created :
+- one with the admin role (User 'admin' with password 'admin')
+- a second with supervizor role (User 'guest', no password)
+```
+
+on each server:
+```
+yum install inkscope-sysprobe psutils sysstat
+pip install psutil
+pip install  pymongo
+edit  /opt/inkscope/etc/inkscope.conf
+/etc/init.d/sysprobe start
+```
+
+在CephProbe所在节点，启动ceph-rest-api服务 
+/etc/init.d/ceph-rest-api start  2>&1 > /var/log/ceph/ceph_rest_api
+
+The monitoring graphs need the installation of influxdb and collectd.
+collectd：定时收集系统性能的统计信息并提供了一个存储机制的守护进程。主要用它来收集cpu，内存，带宽的数据。
+influxdb：分布式的，time series的db
+
+```
+yum install collectd
+cat <<EOF | sudo tee /etc/yum.repos.d/influxdb.repo
+[influxdb]
+name = InfluxDB Repository - RHEL \$releasever
+baseurl = https://repos.influxdata.com/rhel/\$releasever/\$basearch/stable
+enabled = 1
+gpgcheck = 1
+gpgkey = https://repos.influxdata.com/influxdb.key
+EOF
+yum install influxdb
+sudo firewall-cmd --zone=public --add-port=8086/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=8088/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=8083/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=25826/udp --permanent
+sudo firewall-cmd --reload
+```
+在centos系统下，collectd ceph plugins需要[getsigchld.py](https://github.com/collectd/collectd/tree/master/contrib/python)。
+pip install collectd
+检查/etc/collectd.d/ceph_plugins.conf文件中开启`Import "getsigchld"`，并将getsigchld.py文件拷贝到/usr/lib64/python2.7/site-packages/ 。
+检查 Line 54 in /usr/lib/collectd/plugins/ceph/ceph_latency_plugin.py，将默认的data改为cephfs_data。
+
+```
+vi /etc/influxdb/influxdb.conf
+reporting-disabled = true
+
+```
+
+```
+vi /etc/influxdb/influxdb.conf
+[[collectd]]
+  enabled = true
+  bind-address = "Server "172.16.210.121" "25826""
+  database = "collectd"
+  typesdb = "/usr/share/collectd/types.db"
+```
+使用influx命令进入：
+```
+SHOW DATABASES
+CREATE DATABASE collectd
+CREATE USER "root" WITH PASSWORD 'root' WITH ALL PRIVILEGES
+use collectd
+#显示该数据库中所有的表 
+show measurements 
+select * from cpu_value order by time desc 
+```
+
+```
+vi /etc/collectd.conf
+mkdir -p /usr/lib/collectd/plugins/ceph
+cp -p  collectd-ceph-master/plugins/* /usr/lib/collectd/plugins/ceph
+```
+add a configuration file named ceph_plugins.conf in /etc/collectd/collectd.conf.d/ with this content:
+```
+vi /etc/collectd.d/ceph_plugins.conf
+<LoadPlugin "python">
+    Globals true
+</LoadPlugin>
+
+<Plugin "python">
+    ModulePath "/usr/lib/collectd/plugins/ceph"
+    #Import "getsigchld"  #uncomment for centos
+    Import "ceph_latency_plugin"
+   
+    <Module "ceph_latency_plugin">
+        Verbose "True"
+        Cluster "ceph"
+        Interval "60"
+    </Module>
+
+    Import "ceph_monitor_plugin"
+
+    <Module "ceph_monitor_plugin">
+        Verbose "True"
+        Cluster "ceph"
+        Interval "60"
+    </Module>
+    
+    Import "ceph_osd_plugin"
+
+    <Module "ceph_osd_plugin">
+        Verbose "True"
+        Cluster "ceph"
+        Interval "60"
+    </Module>
+
+    Import "ceph_pg_plugin"
+
+    <Module "ceph_pg_plugin">
+        Verbose "True"
+        Cluster "ceph"
+        Interval "60"
+    </Module>
+
+    Import "ceph_pool_plugin"
+
+    <Module "ceph_pool_plugin">
+        Verbose "True"
+        Cluster "ceph"
+        Interval "60"
+        TestPool "test"
+    </Module>
+</Plugin>
+```
+
+`systemctl start collectd.service`
+
+测试端口服务是否正常：
+`nc -l -u -p 25826`
+
+## 服务器停止
+poweroff
+
+## 服务器重启
+cep服务会自动启动修复pg。
+
+在node节点：
+`/etc/init.d/sysprobe start`
+在mon节点：
+```
+/etc/init.d/cephrestapi start
+/etc/init.d/cephprobe start
+/etc/init.d/sysprobe start
+```
+
