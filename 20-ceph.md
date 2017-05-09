@@ -464,6 +464,7 @@ systemctl start mongod
 
 edit  /opt/inkscope/etc/inkscope.conf
 ```
+cat /opt/inkscope/etc/inkscope.conf
 {
     "ceph_conf": "/etc/ceph/ceph.conf",
     "ceph_rest_api": "172.16.210.121:5000",
@@ -477,7 +478,7 @@ edit  /opt/inkscope/etc/inkscope.conf
     "mongodb_passwd":"monpassword",
     "is_mongo_authenticate" : 0,
     "is_mongo_replicat" : 0,
-    "influxdb_endpoint":"http://influxdb_host:influxdb_port",
+    "influxdb_endpoint":"http://172.16.210.121:8086",
     "cluster": "ceph",
     "platform": "x86_64",
     "status_refresh": 3,
@@ -566,57 +567,30 @@ ProxyPass /ceph-rest-api/ http://debianhost.engba.veritas.com:8080/ceph_rest_api
 ErrorLog /var/log/inkscope/webserver_error.log
 CustomLog /var/log/inkscope/webserver_access.log common
 ```
-```
-cat /opt/inkscope/etc/inkscope.conf
-{
-    "ceph_conf": "/etc/ceph/ceph.conf",
-    "ceph_rest_api": "172.16.210.121:5000",
-    "ceph_rest_api_subfolder": "",
-    "mongodb_host" : "ceph-admin",
-    "mongodb_set" : "mongodb0:27017,mongodb1:27017,mongodb2:27017",
-    "mongodb_replicaSet" : "replmongo0",
-    "mongodb_read_preference" : "ReadPreference.SECONDARY_PREFERRED",
-    "mongodb_port" : 27017,
-    "mongodb_user":"ceph",
-    "mongodb_passwd":"monpassword",
-    "is_mongo_authenticate" : 0,
-    "is_mongo_replicat" : 0,
-    "influxdb_endpoint":"http://172.16.210.121:8086",
-    "cluster": "ceph",
-    "platform": "x86_64",
-    "status_refresh": 3,
-    "osd_dump_refresh": 3,
-    "pg_dump_refresh": 60,
-    "crushmap_refresh": 60,
-    "df_refresh": 60,
-    "cluster_window": 1200,
-    "osd_window": 1200,
-    "pool_window": 1200,
-    "mem_refresh": 60,
-    "swap_refresh": 600,
-    "disk_refresh": 60,
-    "partition_refresh": 60,
-    "cpu_refresh": 30,
-    "net_refresh": 30,
-    "mem_window": 1200,
-    "swap_window": 3600,
-    "disk_window": 1200,
-    "partition_window": 1200,
-    "cpu_window": 1200,
-    "net_window": 1200,
-    "inkscope_root" : "172.16.210.121:8080",
-    "radosgw_url": "http://172.16.210.121:7480",
-    "radosgw_admin": "admin",
-    "radosgw_key": "inkscopexxxx",
-    "radosgw_secret": "inkscopexxxx"
-}
-```
 
 打开浏览器访问：http://172.16.210.121:8080，可看到Inscope首页信息了，不过此时没有Ceph集群的信息。
 ```
 On the first launch, two users are created :
 - one with the admin role (User 'admin' with password 'admin')
 - a second with supervizor role (User 'guest', no password)
+```
+```
+mongo
+show dbs
+use inkscope
+show tables
+db.inkscope_users.find()
+db.inkscope_users.update({password:"792fa0e40153f25192715026abd1e445"},{"$set":{name:"admin1"}})
+db.inkscope_users.update({password:"792fa0e40153f25192715026abd1e445"},{"$set":{roles:[ "admin" ]}})
+db.inkscope_users.update({password:"792fa0e40153f25192715026abd1e445"},{"$set":{password:"1964e1c103259ae4f8701c6ff4d26d30"}})
+```
+查看文件/var/www/inkscope/inkscopeCtrl/inkscopeCtrlcore.py中的加密方法：
+```
+import hashlib
+password_r = 'admin'
+secret_key = "Mon Nov 30 17:20:29 2015"
+salted_password = password_r + secret_key
+print hashlib.md5(salted_password).hexdigest()
 ```
 
 on each server:
@@ -744,6 +718,8 @@ vi /etc/collectd.d/ceph_plugins.conf
 
 测试端口服务是否正常：
 `nc -l -u -p 25826`
+
+
 
 ## 服务器停止
 poweroff
