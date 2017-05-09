@@ -37,6 +37,8 @@
 
 [Tidb技术](32-TidbTech .md)
 
+[InfluxDB](32-InfluxDB.md)
+
 ### 翻译
 
 [Cockroach Design 翻译](33-CockroachDesign.md)
