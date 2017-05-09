@@ -582,7 +582,7 @@ show tables
 db.inkscope_users.find()
 db.inkscope_users.update({password:"792fa0e40153f25192715026abd1e445"},{"$set":{name:"admin1"}})
 db.inkscope_users.update({password:"792fa0e40153f25192715026abd1e445"},{"$set":{roles:[ "admin" ]}})
-db.inkscope_users.update({password:"792fa0e40153f25192715026abd1e445"},{"$set":{password:"1964e1c103259ae4f8701c6ff4d26d30"}})
+db.inkscope_users.update({password:"792fa0e40153f25192715026abd1e445"},{"$set":{password:"11bdb07177c71765ba91f11a0e8b5979"}})
 ```
 查看文件/var/www/inkscope/inkscopeCtrl/inkscopeCtrlcore.py中的加密方法：
 ```
