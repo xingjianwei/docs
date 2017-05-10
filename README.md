@@ -15,6 +15,8 @@
 
 [gitlab](20-gitlab.md)
 
+[readmine](20-redmine.md)
+
 [ceph](20-ceph.md)
 
 [kubernetes](20-kubernetesInstall.md)

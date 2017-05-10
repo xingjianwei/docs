@@ -736,3 +736,40 @@ cep服务会自动启动修复pg。
 /etc/init.d/sysprobe start
 ```
 
+## 日常运维
+```
+ceph osd stat
+osdmap e400: 36 osds: 34 up, 34 in
+```
+```
+ceph osd tree
+ceph -w
+```
+经过一段时间后依旧有一些PGS无法+recovering.
+如果一个硬盘故障导致osd节点出现如下的down状态，且一直无法恢复（ reweight列等于0，表示osd已经out此集群）。
+
+一般情况下重启服务或者重启节点即可。
+
+```
+systemctl stop ceph-osd@9
+umount /var/lib/ceph/osd/ceph-9  卸载挂载分区
+ceph osd rm 9  在集群中删除一个osd硬盘
+ceph osd crush rm osd.9 在集群中删除一个osd 硬盘 crush map
+ceph auth del osd.9 
+```
+osd9所属的节点为ceph-node2，磁盘为sdc，`mkfs.xfs  -f /dev/sdc`。
+```
+cd beagle-cluster    否则会找不到keyring。
+ceph-deploy  disk zap ceph-node2:/dev/sdc
+ceph-deploy osd prepare ceph-node2:sdc:/dev/sdb
+ceph-deploy osd activate ceph-node2:sdc1:/dev/sdb1
+```
+
+摘掉osd的脚本如下
+```
+osd_id=`ceph osd tree | grep down | grep osd | awk '{print $3}' | awk -F . '{print $2}'`
+ceph osd rm ${osd_id}
+ceph osd crush rm osd.${osd_id}
+ceph auth del osd.${osd_id}
+umount /var/lib/ceph/osd/ceph-${osd_id}
+```

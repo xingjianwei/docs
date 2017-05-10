@@ -1,10 +1,18 @@
 # openldap.md
 
+[OpenLDAP学习笔记](http://blog.csdn.net/jbgtwang/article/details/40117273)
+
 [osixia/openldap](https://github.com/osixia/docker-openldap)
 
 [Backup](https://github.com/osixia/docker-openldap-backup)
 
 [Administrate your ldap server](https://github.com/osixia/docker-phpLDAPadmin)
+
+GUI管理工具
+
+web管理-ldap-account-manager
+
+自助密码修改-self-service-password
 
 docker run --env LDAP_ORGANISATION="My Company" --env LDAP_DOMAIN="my-company.com" \
 --volume /data/slapd/database:/var/lib/ldap \
