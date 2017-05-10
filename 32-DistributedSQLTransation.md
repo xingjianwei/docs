@@ -211,6 +211,53 @@ Base = Basically Available + Soft state + Eventuallyconsistent 基本可用性+�
 
 ## 分布式存储算法和技术实现（Atomic）
 
+### 从分布式系统说起
+
+**Leslie Lamport：**
+
+> What is a distributed systeme. Distribution is in the eye of the beholder.To the user sitting at the keyboard, his IBM personal computer is a nondistributed system.To a flea crawling around on the circuit board, or to the engineer who designed it, it's very much a distributed system.
+>
+> ​                                                                                                                                      1983年PODC大会
+
+```
+很多早期的分布式研究是从更加微观的多路处理器的研究开始的, 无论是狭义还是广义的分布式系统, 并发一致性一直是分布式系统的核心问题.
+描述，引申一致性
+```
+
+### 一致性定义
+
+[Solved Problems, Unsolved Problems and Problems in Concurrency](http://research.microsoft.com/en-us/um/people/lamport/pubs/solved-and-unsolved.pdf)
+
+ [The Byzantine Generals Problem](http://research.microsoft.com/en-us/um/people/lamport/pubs/byz.pdf)
+
+[Impossibility of Distributed Consensus with One Faulty Process](http://cs-www.cs.yale.edu/homes/arvind/cs425/doc/fischer.pdf)
+
+**一致性条件**
+
+**一致性面临的问题**
+
+- 消息传递
+- 节点问题
+- 网络分化
+- 拜占庭将军
+
+[FLP Impossibility](http://danielw.cn/FLP-proof)
+
+**一致性基本概念**
+
+- XA
+- 二段提交
+- 三段提交
+- 选举、多数派、租约
+- 时间、时钟和时序（物理时钟、逻辑时钟 Lamport Clock|Vector clock）
+- 各类一致性模型：理想的一致性模型及Sequential consistency、Linearizability、Casual Consistency, PRAM, Eventual Consistency、Weak Consistency
+- 分布式一致性协议与算法
+  1. Paxos
+  2. Raft
+  3. Zab
+  4. Paxos变种
+
+
 ### Paxos 一致性算法
 
 Paxos 算法解决的问题是一个分布式系统如何就某个值（决议）达成一致。一个典型的场景是，在一个分布式数据库系统中，如果各节点的初始状态一致，每个节点执行相同的操作序列，那么他们最后能得到一个一致的状态。为保证每个节点执行相同的命令序列，需要在每一条指令上执行一个“一致性算法”以保证每个节点看到的指令一致。一个通用的一致性算法可以应用在许多场景中，是分布式计算中的重要问题。因此从20世纪80年代起对于一致性算法的研究就没有停止过。节点通信存在两种模型：共享内存（Shared memory）和消息传递（Messages passing）。Paxos 算法就是一种基于消息传递模型的一致性算法。
