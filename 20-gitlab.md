@@ -30,6 +30,18 @@ Gitlab备份：
 `gitlab_rails['backup_path'] = "/var/opt/gitlab/backups"`
 `/var/opt/gitlab/backups`修改为你想存放备份的目录即可, 修改完成之后使用`gitlab-ctl reconfigure`命令重载配置文件即可.
 
+Gitlab备份：
+```
+# 停止相关数据连接服务
+gitlab-ctl stop unicorn
+gitlab-ctl stop sidekiq
+# 从1481598919编号备份中恢复
+gitlab-rake gitlab:backup:restore BACKUP=1481598919
+```
+
+# 启动Gitlab
+sudo gitlab-ctl start
+
 ### gitlab迁移
 
 迁移如同备份与恢复的步骤一样, 只需要将老服务器/var/opt/gitlab/backups目录下的备份文件拷贝到新服务器上的/var/opt/gitlab/backups即可(如果你没修改过默认备份目录的话). 

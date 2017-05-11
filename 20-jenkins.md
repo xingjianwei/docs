@@ -8,4 +8,5 @@ jenkins-2.0-1.1.noarch
 rpm安装后的配置文件在`/etc/sysconfig/jenkins`
 ```
 JENKINS_HOME="/var/lib/jenkins"
+JENKINS_USER="jenkins"
 ```

@@ -17,6 +17,8 @@
 
 [readmine](20-redmine.md)
 
+[jenkins](20-jenkins.md) 
+
 [ceph](20-ceph.md)
 
 [kubernetes](20-kubernetesInstall.md)

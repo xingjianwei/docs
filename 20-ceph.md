@@ -207,7 +207,7 @@ yum history redo last
 ```
 public network = 172.16.210.0/24
 
-cluster network = 192.168.1.0/24
+cluster network = 192.168.2.0/24
 ```
 
 安装 Ceph:
