@@ -370,7 +370,64 @@ FLP定理(FLP impossibility)已经证明在一个收窄的模型中(异步环境
 
   ​
 
-- 时间、时钟和时序（物理时钟、逻辑时钟 Lamport Clock|Vector clock）
+- 时间、时钟和时序
+
+  分布式系统下需要记录和比较不同节点间事件发生的顺序，但不同于现实生活中使用物理时钟记录时间，分布式系统使用逻辑时钟记录事件顺序关系。为什么不适用物理时钟呢，这是由于现实生活中物理时间有统一的标准，而分布式系统中每个节点记录的时间并不一样，即使设置了 NTP 时间同步节点间也存在毫秒级别的偏差。例如，有日志服务器记录日志，如果异步执行，即使时间同步，若事件发生在几个节点，也可能出现事件乱序的情况，节点A执行事件1后发送日志到事件记录服务器节点C，同时发送消息到节点B通知其执行事件2后发送执行日志到事件记录服务器节点C，正常情况下，在C上的记录顺序可能是事件1，事件2，但由于网络原因，可能导致B发送的事件2排在事件1之前。
+
+  因此，分布式系统需要有另外的方法记录事件顺序关系，这就是逻辑时钟。
+
+  - Lamport Clock
+
+    Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为[Lamport时间戳](https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system/?from=http%3A%2F%2Fresearch.microsoft.com%2Fen-us%2Fum%2Fpeople%2Flamport%2Fpubs%2Ftime-clocks.pdf)(Lamport timestamps或Lamport Clock)。
+
+    分布式系统中按是否存在节点交互事件可分为三类事件，节点内部，发送事件，接收事件。
+
+    Lamport时间戳包含下列规则：
+
+    1. 每个事件对应一个Lamport时间戳，初始值为0
+    2. 在节点内发生的事件，时间戳加1。
+    3. 如果事件属于发送事件，时间戳加1并在消息中带上该时间戳
+    4. 如果事件属于接收事件，时间戳由本地时间戳与消息中带的时间戳中取最大值加1。
+
+    用伪代码描述发送事件时间戳
+
+    ```
+    time = time+1;
+    time_stamp = time;
+    send(message, time_stamp);
+    ```
+
+    接收事件时间戳:
+
+    ```
+    (message, time_stamp) = receive();
+    time = max(time_stamp, time)+1;
+    ```
+
+    > **Happend-before**
+    >
+    > 若事件a、b满足下面任一条件，可记为a->b：
+    >
+    > - 如果a、b发生在同一节点，并且a发生在b之前，a->b
+    > - 如果a是一个节点上的发送事件，b是另一节点上的接收事件，那么a->b
+
+    如上面给的例子
+
+    ![Lamport-clock1](media/32-DistributedSQLTransation/Lamport-clock1.png)
+
+    ![Lamport-clock2](media/32-DistributedSQLTransation/Lamport-clock2.png)
+
+    由图可以看到各事件的时间戳，但也可以看到其中c、d和e、g具有相同的事件戳，这时候，需要将A、B、C进行编号，相同时间戳取按节点编号顺序排列，所以c=>d,e=>g，由此可以得到事件的全序关系：a->b->c=>d->e=>g->f->h。
+
+    可以看到Lamport timestamps是存在一些问题的，它确保了所有因果关系不会出现逻辑错误，但是不能保证系统的公平性。
+
+  - Vector clock
+
+  - Version vectors
+
+  - Matrix clocks
+
+  ​
 
   ​
 
