@@ -328,10 +328,13 @@ By default, the RGW instance will listen on port 7480
 
 在管理节点上：
 
+[参考文档](http://www.tuicool.com/articles/VZNn2qj)
 ```
 ceph-deploy install ceph-client
 ceph-deploy admin ceph-client
+
 ```
+
 #### CEPH块设备
 
 在 ceph-client 节点上创建一个块设备 image 。
@@ -367,6 +370,11 @@ cd /mnt/ceph-block-device
 ceph osd pool create cephfs_data 1000
 ceph osd pool create cephfs_metadata 1000
 ceph fs new beaglefs cephfs_metadata cephfs_data
+ceph osd pool create cephfs_nasbak 1000
+ceph osd pool create cephfs_metanasbak 1000
+ceph fs new nasbackup cephfs_metanasbak cephfs_nasbak
+
+
 ```
 
 创建密钥文件:
