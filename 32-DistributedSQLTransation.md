@@ -372,7 +372,7 @@ FLP定理(FLP impossibility)已经证明在一个收窄的模型中(异步环境
 
 - 时间、时钟和时序
 
-  分布式系统下需要记录和比较不同节点间事件发生的顺序，但不同于现实生活中使用物理时钟记录时间，分布式系统使用逻辑时钟记录事件顺序关系。为什么不适用物理时钟呢，这是由于现实生活中物理时间有统一的标准，而分布式系统中每个节点记录的时间并不一样，即使设置了 NTP 时间同步节点间也存在毫秒级别的偏差。例如，有日志服务器记录日志，如果异步执行，即使时间同步，若事件发生在几个节点，也可能出现事件乱序的情况，节点A执行事件1后发送日志到事件记录服务器节点C，同时发送消息到节点B通知其执行事件2后发送执行日志到事件记录服务器节点C，正常情况下，在C上的记录顺序可能是事件1，事件2，但由于网络原因，可能导致B发送的事件2排在事件1之前。
+  分布式系统下需要记录和比较不同节点间事件发生的顺序，但不同于现实生活中使用物理时钟记录时间，分布式系统使用逻辑时钟记录事件顺序关系。为什么不适用物理时钟呢，这是由于现实生活中物理时间有统一的标准，而分布式系统中每个节点记录的时间并不一样，即使设置了 NTP 时间同步节点间也存在毫秒级别的偏差。并且存在网络的原因，一旦延时，可能会使事件乱序。
 
   因此，分布式系统需要有另外的方法记录事件顺序关系，这就是逻辑时钟。
 
@@ -411,28 +411,127 @@ FLP定理(FLP impossibility)已经证明在一个收窄的模型中(异步环境
     > - 如果a、b发生在同一节点，并且a发生在b之前，a->b
     > - 如果a是一个节点上的发送事件，b是另一节点上的接收事件，那么a->b
 
-    如上面给的例子
+    例子
 
     ![Lamport-clock1](media/32-DistributedSQLTransation/Lamport-clock1.png)
 
     ![Lamport-clock2](media/32-DistributedSQLTransation/Lamport-clock2.png)
 
-    由图可以看到各事件的时间戳，但也可以看到其中c、d和e、g具有相同的事件戳，这时候，需要将A、B、C进行编号，相同时间戳取按节点编号顺序排列，所以c=>d,e=>g，由此可以得到事件的全序关系：a->b->c=>d->e=>g->f->h。
+    由图可以看到各事件的时间戳，但也可以看到其中c、d和e、g具有相同的事件戳，这时候，需要将节点A、B、C进行编号，相同时间戳取按节点编号顺序排列，所以c=>d,e=>g，由此可以得到事件的全序关系：a->b->c=>d->e=>g->f->h。
 
     可以看到Lamport timestamps是存在一些问题的，它确保了所有因果关系不会出现逻辑错误，但是不能保证系统的公平性。
 
   - Vector clock
 
+    Lamport timestamps存在这并发公平性问题，所以演进除了另一种逻辑时钟方法，即[Vector clock](http://www.vs.inf.ethz.ch/publ/papers/VirtTimeGlobStates.pdf)。
+
+    Vector clock可以解决这个问题，它通过vector结构不但记录本节点的Lamport时间戳，同时也记录了其他节点的Lamport时间戳。Vector clock的原理与Lamport时间戳类似，如图：
+
+    ![Vector_Clock](media/32-DistributedSQLTransation/500px-Vector_Clock.svg.png)
+
+    假设有事件a、b分别在节点P、Q上发生，Vector clock分别为Ta、Tb，如果 Tb[Q] > Ta[Q] 并且 Tb[P] >= Ta[P]，则a发生于b之前，记作 a -> b。那Vector clock怎么判别同时发生关系呢？
+
+    如果 Tb[Q] > Ta[Q] 并且 Tb[P] < Ta[P]，则认为a、b同时发生，记作 a <-> b。例如图2中节点B上的第4个事件 (A:2，B:4，C:1) 与节点C上的第2个事件 (B:3，C:2) 没有因果关系、属于同时发生事件。
+
+    Vector clocks允许为事件的部分因果排序。有图可知，基于Vector clock我们可以获得任意两个事件的顺序关系，结果或为先后顺序或为同时发生，识别事件顺序在工程实践中有很重要的引申应用，
+
+    下面以一个[简单的例子](http://basho.com/posts/technical/why-vector-clocks-are-easy/)说明：
+
+    > ​	Alice, Ben, Cathy, 和 Dave计划下周一起吃晚餐，计划始于Alice建议他们在周三见面。稍后， Dave 与Cathy经过讨论，他们决定在星期四。Dave同时与Ben在邮件中确认在星期二见面。当Alice收集所有人的反馈，看是否还是在周三见面时，她得到了混合消息：Cathy反馈说她和Dave决定在星期四，Ben反馈他和Dave决定在星期二，Dave没有反馈，所以没人能确认这些讨论合适发生的，并且也都不能确认到底应该在周二还是周四晚餐。
+
+    与这个例子类似，结果都是相同的，当你去询问两个人信息时，如果他们给你的是不同的反馈，没有人能确认哪条才是最新的反馈。
+
+    利用vector clocks解决这个问题，从Alice开始初始化整个事件：
+
+    ```
+    date = Wednesday
+    vclock = Alice:1
+    ```
+
+    Alice将此作为第一个版本的信息，并发送信息通知给每个人。
+
+    此时 Dave 与Cathy开始讨论，Cathy建议：
+
+    ```
+    date = Thursday
+    vclock = Alice:1, Cathy:1
+    ```
+
+    Dave 没管Alice的建议，但是将其作为第一个版本信息记录下来了，并接收到了Cathy的建议：
+
+    ```
+    date = Thursday
+    vclock = Alice:1, Cathy:1, Dave:1
+    ```
+
+    并将信息反馈给了Cathy，Cathy记录下这些信息，由于此时Ben没有收到Dave和Cathy的反馈，只接收到了Alice的建议，这时Ben开始反馈他的建议给Dave：
+
+    ```
+    date = Tuesday 
+    vclock = Alice:1, Ben:1
+    ```
+
+    这是Dave将发现冲突：
+
+    ```
+    date = Thursday
+    vclock = Alice:1, Cathy:1, Dave:1
+    ```
+
+    和
+
+    ```
+    date = Tuesday 
+    vclock = Alice:1, Ben:1
+    ```
+
+    由于两个结果无法确认哪个是最新的版本，所以，这时在Dave处将引起冲突。此时假设Dave确定选取周四：
+
+    ```
+    date = Thursday
+    vclock = Alice:1, Cathy:1, Ben:1, Dave:2
+    ```
+
+    并将信息反馈给Ben。
+
+    这时如果Alice从Cathy和Ben出获得信息，Cathy：
+
+    ```
+    date = Thursday
+    vclock = Alice:1, Cathy:1, Dave:1
+    ```
+
+    Ben：
+
+    ```
+    date = Thursday
+    vclock = Alice:1, Cathy:1, Ben:1, Dave:2
+    ```
+
+    这时Dave的信息版本已经变为了2，即使Dave没有反馈，Alice也会知道Ben反馈的是最新信息，而Cathy的是以前的信息。
+
+    ​
+
   - Version vectors
+
+    Version vectors是Vector clock的一个变种，实现上与Vector clock类似，目的用于发现数据冲突。分布式系统中数据一般存在多个副本，多个副本可能被同时更新，这会引起副本间数据不一致。每一个副本节点对于一个文件保存一个版本向量 version vectors，Version vectors用来记录不同节点对于该文件的修改。向量含有N个元素，N为拥有该文件的节点数。向量中每一个元素，比如(Si : vi )表示，节点Si上对文件f进行了共vi次修改。通过比较不同节点保存的version vectors向量可以发现节点间的更新冲突。Vector clock只用于发现数据冲突，不能解决数据冲突。如何解决数据冲突因场景而异，具体方法有以最后更新为准，或将冲突的数据交给client由client端决定如何处理，或通过选举决议事先避免数据冲突的情况发生。 因Vector Clock算法需维护一个副本节点数长度的版本向量，造成对节点的动态加入不灵活，以及当副本节点不断增长时，进行副本管理的数据量也会不断增长。
+
+    > amazon的分布式存储引擎Dynamo早期就是通过**Version vectors**来构建**同一对象**多个事件的**部分有序**的时序集合。现在的amazon dynamo早已摒弃了version vectors，而采用了synchronous replication。
 
   - Matrix clocks
 
-  ​
+    [Matrix clocks](https://doi.org/10.1016/S0167-8191%2803%2900066-8)是在分布式系统中捕捉时间和因果关系的机制。
 
-  ​
+    Matrix clocks是Vector clock概念的引申。Matrix clocks保存每个通信主机的Vector clock的向量（Vector ）。
+
+    每次交换消息时，发送主机不仅发送它知道的全局状态的时间，而且它收到从其他主机接收到的时间状态。
+
+  > Google Spanner的关键技术是TrueTime API（具有原子时钟和GPS）。TrueTime API直观的揭示了时钟的不可靠性，它运行提供的边界更决定了时间标记。
+  >
+  > CockroachDB使用了一个叫[HLC](http://www.cse.buffalo.edu/tech-reports/2014-04.pdf)（hybird logic clocks）算法，在保持逻辑时钟的特点的同时又逼近真实事件。
+
 
 - 各类一致性模型：理想的一致性模型及Sequential consistency、Linearizability、Casual Consistency, PRAM, Eventual Consistency、Weak Consistency
-
 - 分布式一致性协议与算法
   1. Paxos
   2. Raft
