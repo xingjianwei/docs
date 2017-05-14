@@ -722,7 +722,11 @@ vi /etc/collectd.d/ceph_plugins.conf
 </Plugin>
 ```
 
-`systemctl start collectd.service`
+```
+systemctl start collectd.service
+systemctl enable collectd.service
+systemctl daemon-reload
+```
 
 测试端口服务是否正常：
 `nc -l -u -p 25826`
