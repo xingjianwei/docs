@@ -597,7 +597,7 @@ FLP定理(FLP impossibility)已经证明在一个收窄的模型中(异步环境
 
   如果进程读取先前写入内存位置的值，则无法在以后读取该位置的任何较早值。进程执行的写入在该进程中将立即可见，在其他进程不一定。Slow Consistency要比PRAM Consistency、Cache Consistency一致性要弱。
 
-  > ![slow](media/32-DistributedSQLTransation/slow_memory.gif)
+  > ![slow](media/32-DistributedSQLTransation/Slow_memory.gif)
   >
   > 例如，第一个过程写1到内存位置X，然后它写1到内存位置Y。第二个过程从Y中读取1，然后从X位置读取到 0，即使X是写在Y之前。在此模型中将依赖于显式同步，需要编程使用原子锁。
 
