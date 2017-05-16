@@ -771,7 +771,7 @@ Percolator 是 Google 的上一代分布式事务解决方案，构建在 BigTab
 
 一致性协议与算法目前有多种，包括Paxos、Raft、Zab、VR等，都是当前分布式系统实现时的可选方案。这些协议或算法包含了很多共同的内容或基本概念，如选举、多数派、状态机等，Paxos、Raft、Zab和VR都是解决一致性问题的协议，Paxos协议原文倾向于理论，最初的描述是针对非常理论的一致性问题，真正能应用于工程实现的mulit-paxos，Lamport也是很粗略的描述，以后有人尝试对multi-paxos做出更为完整详细的描述，但是每个人描述的都不大一样。Raft、Zab、VR倾向于实践，一致性保证程度等的不同也导致这些协议间存在差异。相比Raft、Zab、VR，Paxos更纯粹、更接近一致性问题本源，尽管Paxos倾向理论，但不代表Paxos不能应用于工程。基于Paxos的工程实践，须考虑具体需求场景(如一致性要达到什么程度)，再在Paxos原始语意上进行包装。也可以将其他的一致性协议或者算法看做是Paxos的一个变种。Raft、Zab、VR，multi-paxos，这些都可以被称之为基于leader的一致性协议。不同的是，multi-paxos是作为对经典paxos的优化而提出，通过选择一个proposer作为leader降低多个proposer引起冲突的频率，合并阶段将一次决议的平均消息代价缩小到最优的两次，实际上就算有多个leader存在，算法还是安全的，只是退化为了经典的paxos算法。而经典的paxos，从一个proposal被提出到被接受分为两个阶段，第一个阶段去询问值，第二阶段根据询问的结果提出值。这两个阶段是无法分割的，相互关联，共同保障了协议的一致性。而VR,ZAB,Raft这些强调合法leader的唯一性协议，它们是从leader的角度描述协议的流程，也从leader的角度出发论证正确性。但是实际上它们使用了和Paxos完全一样的原理来保证协议的安全性，当同时存在多个节点同时尝试成为leader或者不止一个节点认为自己时leader时，本质上它们和经典Paxos中多个proposer并存的情形没什么不同。实现分布式系统时，先从具体需求和场景考虑，Raft、Zab、VR、Paxos等协议没有绝对地好与不好，只是适不适合。
 
-> Google的Chubby、Megastore（发表的论文里有关于mulit-paxos的公开细节）使用了Paxos，zookeeper使用了Zab，Raft是工程上应用最多的算法，很多知名组件都使用了raft协议，在github上有各种语言实现raft的算法包，请参考：https://raft.github.io/
+Google的Chubby、Megastore（发表的论文里有关于mulit-paxos的公开细节）使用了Paxos，zookeeper使用了Zab，Raft是工程上应用最多的算法，很多知名组件都使用了raft协议，在github上有各种语言实现raft的算法包，请参考：https://raft.github.io/
 
 ### Paxos 一致性算法
 
@@ -780,6 +780,25 @@ Paxos 算法解决的问题是一个分布式系统如何就某个值（决议�
 不仅仅是在分布式系统中，凡是多个过程需要达成某种一致的场合都可以使用Paxos 算法。一致性算法可以通过共享内存（需要锁）或者消息传递实现，Paxos 算法采用的是后者。Paxos 算法适用的几种情况：一台机器中多个进程/线程达成数据一致；分布式文件系统或者分布式数据库中多客户端并发读写数据；分布式存储中多个副本响应读写请求的一致性。
 
 因此一些著名的系统如Google的Chubby和Yahoo的Apache ZooKeeper都使用了paxos算法。
+
+参与者（一个进程可以同时是三种角色）：
+1. proposer：提出提案的进程。
+2. acceptor：接收提案并决定是否可以通过的进程。
+3. learner：接收被选择的提案的进程。
+
+术语：
+* 提案：如提案A｛id:1,value:set a = 5｝。
+* 通过：acceptor同意的提案。
+* 选定：超过半数acceptor通过，并最终决定的提案。
+
+
+1. prepare
+proposer选择一个新的提案编号n，然后向某个acceptors集合的所有成员发送请求，要求这些acceptor做出如下回应：
+(a).保证不再通过任何编号小于n的提案
+(b).返回当前它已经通过的编号小于n的最大编号的提案，如果存在的话
+2. accept
+如果proposer收到了来自半数以上的acceptor的响应结果，那么它就可以产生编号为n，value值为v的提案，这里v是所有响应中编号最大的提案的value值，如果响应中不包含任何的提案那么这个值就可以由proposer任意选择。
+
 
 [如何浅显易懂地解说 Paxos 的算法](https://www.zhihu.com/question/19787937)
 
