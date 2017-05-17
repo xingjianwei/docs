@@ -7,6 +7,7 @@
 
 ## NOSQL的兴起和优缺点
 现代计算系统每天在网络上都会产生庞大的数据量。这些数据有很大一部分是由关系型数据库管理系统（RDBMSs）来处理，其严谨成熟的数学理论基础使得数据建模和应用程序编程更加简单。但随着信息化的浪潮和互联网的兴起，传统的RDBMS在一些业务上开始出现问题。首先，对数据库存储的容量要求越来越高，单机无法满足需求，很多时候需要用集群来解决问题，而RDBMS由于要支持join，union等操作，一般不支持分布式集群。其次，在大数据大行其道的今天，很多的数据都“频繁读和增加，不频繁修改”，而RDBMS对所有操作一视同仁，这就带来了优化的空间。另外，互联网时代业务的不确定性导致数据库的存储模式也需要频繁变更，不自由的存储模式增大了运维的复杂性和扩展的难度。
+
 ### 优点
 * 易扩展
 NoSQL数据库种类繁多，但是有一个共同的特点，都是去掉了关系型数据库的关系型特性。数据之间无关系，这样就非常容易扩展。也无形之间，在架构的层面上带来了可扩展的能力。
@@ -16,6 +17,7 @@ NoSQL数据库都具有非常高的读写性能，尤其在大数据量下，同
 NoSQL无需事先为要存储的数据建立字段，随时可以存储自定义的数据格式。而在关系型数据库里，增删字段是一件非常麻烦的事情。如果是非常大数据量的表，增加字段简直就是一个噩梦。这点在大数据量的web2.0时代尤其明显。
 * 高可用
 NoSQL在不太影响性能的情况下，就可以方便地实现高可用的架构。比如Cassandra、HBase模型，通过复制模型也能实现高可用。
+
 ### 缺点
 * 没有标准
 没有对NoSQL数据库定义的标准，所以没有两个NoSQL数据库是平等的。
@@ -99,6 +101,32 @@ CockroachDB是一个基于事务和强一致性键值存储构建的分布式SQL
 
  [cockroachdb设计翻译](https://lihuanghe.github.io/2016/05/06/cockroachdb-design.html)
 
+### OceanBase
+OceanBase是阿里巴巴自主研发的一个支持海量数据的高性能分布式数据库系统。
+
+OceanBase使用了分布式技术和无共享架构，来自业务的访问会自动分散到多台数据库主机上。
+
+OceanBase引入了Paxos协议，每一笔事务，主库执行完成后，要同步到半数以上库(包括主库自身)，例如3个库中的2个库，或者5个库中的3个库，事务才成功。这样，少数库(例如3个库中的1个库，或者5个库中的2个库)异常后业务并不受影响。分布式事务一致性协议paxos主要用于保证一个数据在分布式系统里是可靠的。
+
+OceanBase是“基线数据（硬盘）”+“修改增量（内存）”的架构。
+
+即整个数据库以硬盘（通常是SSD）为载体，新近的增、删、改数据（“修改增量”）在内存，而基线数据在保存在硬盘上，因此OceanBase可以看成一个准内存数据库。这样的好处是：
+* 写事务在内存（除事务日志必须落盘外），性能大大提升
+* 没有随机写硬盘，硬盘随机读不受干扰，高峰期系统性能提升明显；对于传统数据库，业务高峰期通常也是大量随机写盘（刷脏页）的高峰期，大量随机写盘消耗了大量的IO，特别是考虑到SSD的写入放大，对于读写性能都有较大的影响
+* 基线数据只读，缓存（cache）简单且效果提升
+* 线上OceanBase的内存配置是支撑平常两天的修改增量（从OceanBase 1.0开始，每台OceanBase都可以写入，都承载着部分的修改增量），因此即使突发大流量为平日的10-20倍，也可支撑1~2个小时以上。
+
+修改增量在内存，大概需要多大的内存？即使按双11全天的支付笔数10.5亿笔，假设每笔1KB，总共需要的内存大约是1TB，平均到10台服务器，100GB/台。
+
+在类似双十一这种流量特别大的场景中，OceanBase内存能够支持峰值业务写入1~2个小时以上，之后OceanBase必须把内存中的增删改数据（“修改增量”）尽快整合到硬盘并释放内存，以便业务的持续写入。整合内存中的修改增量到硬盘，OceanBase称为每日合并，必然涉及到大量的硬盘读写（IO），因此可能对业务的吞吐量和事务响应时间（RT）产生影响。如何避免每日合并对业务的影响呢？OceanBase通过“轮转合并”解决了这个问题。
+
+出于高可用的考虑，OceanBase是三机群（zone）部署。
+
+根据配置和部署的不同，业务高峰时可以一个机群（zone）、两个机群（zone）或者三个机群（zone）提供读写服务。OceanBase的轮转合并就是对每个机群（zone）轮转地进行每日合并，在对一个机群（zone）进行每日合并之前，先把该机群（zone）上的业务读写流量切换到另外的一个或两个机群（zone），然后对该机群（zone）进行全速的每日合并。因此在每日合并期间，合并进行中的机群（zone）没有业务流量，仅仅接收事务日志并且参与Paxos投票，业务访问OceanBase的事务响应时间完全不受每日合并的影响，仅仅是OceanBase的总吞吐量有所下降：如果先前是三个机群（zone）都提供服务则总吞吐量下降1/3，如果先前只有一个或两个机群（zone）提供服务则总吞吐量没有变化。
+
+轮转合并使得OceanBase对SSD十分友好，避免了大量随机写盘对SSD寿命的影响，因此OceanBase可以使用相对廉价的“读密集型”SSD来代替传统数据库使用的相对昂贵的“读写型”SSD，而不影响性能。此外由于轮转合并对服务器的CPU使用、硬盘IO使用以及耗时长短都不敏感（高峰期的传统数据库在刷脏页的同时还要优先保证业务访问的吞吐量和事务响应时间，刷脏页的CPU及IO资源都非常受限），因此OceanBase在每日合并时可以采用更加高效的压缩或者编码算法（比如压缩或编码速度略慢，但压缩率较高、解压缩很快的算法），从而进一步降低存储成本并提升性能。
+
+
 ### BDRT
 天云大数据BDRT（Beagledata Realtime Transaction）是一款大规模高并发支持灵活查询的实时查询引擎，具有高可用、可横向扩展、健壮性的特点，支持数据自动均匀分布、支持索引及事务控制、支持REST、SQL、SDK等接口，支持上千个用户并发的进行实时查询。
 
@@ -109,7 +137,7 @@ BDRT具有包括Java、Python、Scala SDK，RESTFul API，SQL等多种读写接�
 为了更好的查询效率和对各种数据类型有更好的支持，BDRT索引包含了多种数据类型的索引，这些数据类型包括：Byte、Short、Integer、Long、Float、Double、Decimal、Precision、String、Date、Instant等，有了这些数据类型，索引就可以根据业务实际需要来进行选择，紧密的和业务结合在一起。
 通过持久化接口将数据在BDRT中持久化。BDRT原生支持了多种数据类型，这些类型包括：String、Character、Boolean、Byte、Short、Integer、Long、Float、Double、Decimal（拥有三位小数的数字）、Precision（拥有6位小数的数字）、Date、UUID。
 
-#### BDRT查询引擎具有下列特性：
+#### 产品特性
 * 与hadoop生态圈紧密结合，可与其他hadoop组件进行无缝集成。
 * 支持数据和用户的高扩展，水平扩展非常容易。支持高效稳定的海量数据存储，可有效支持上亿行、上百万列、上万个版本，支持对数据自动分片。
 * 具有容错性的数据分发和备份，对索引分片，并对每个分片创建多个副本。每个副本都可以对外提供服务。一个副本的异常不会对整个集群提供索引服务造成影响。
@@ -118,7 +146,7 @@ BDRT具有包括Java、Python、Scala SDK，RESTFul API，SQL等多种读写接�
 * 读写严格一致，支持ACID（ACID指数据库正确执行的四个基本要素，包括:原子性，一致性，隔离性，持久性）和最终一致性。支持事务的提交和回滚，有效保障了数据的完整性。
 * 数据查询的秒级毫秒级响应，从而支持OLTP。
 
-#### 产品优势：
+#### 产品优势
 * 采用分布式架构解决数据的安全性、稳定性，相对于传统关系型数据库，大大提高了数据的存储容量。
 * 支持数据和用户的高扩展，水平扩展非常容易。支持高效稳定的海量数据存储，可有效支持上亿行、上百万列、上万个版本，支持对数据自动分片。
 * 具有容错性的数据分发和备份，对索引分片，并对每个分片创建多个副本。每个副本都可以对外提供服务。一个副本的异常不会对整个集群提供索引服务造成影响。
@@ -128,11 +156,138 @@ BDRT具有包括Java、Python、Scala SDK，RESTFul API，SQL等多种读写接�
 * 可与其他组件可以做到轻松集成，既可以与业务系统结合，将读数据放到BDRT端，来做读写分离，为业务系统减负，也可通过大数据平台hadoop和spark进行ETL处理，从而支持OLAP。
 * 良好的开发规范和完善的文档支持，降低了开发人员的使用门槛，无需关心BDRT的底层。
 
-#### 适用场景：
+#### 适用场景
 * 利用BDRT低延时、高性能、海量存储等特性，满足需要从海量的历史和实时数据中秒级获取有效信息的场景。
 * 在分布式背景下，数据量不断的增长，需要高速的读写，并有复杂的ETL需要的场景。
 * 用户使用频率非常高，重要程度仅次于核心应用，对数据的丢失以及服务的中断零容忍的场景。
 * 对数据的一致性有要求的场景。
+
+## 开源SQL引擎介绍
+
+[6大主流开源SQL引擎总结](http://www.toutiao.com/a6392538584179720449/?tt_from=email&utm_campaign=client_share&app=news_article_social&utm_source=email&iid=9347877982&utm_medium=toutiao_ios)
+
+Hive、Impala、Spark SQL、Drill、HAWQ 、Presto、Druid、Calcite、Kylin、Phoenix、Tajo 和Trafodion。2个商业化选择Oracle Big Data SQL 和IBM Big SQL（BigSQL 3.0 包含在 [BigInsights 3.0](https://www.ibm.com/analytics/us/en/technology/hadoop/) ），IBM 尚未将后者更名为“Watson SQL”。
+
+不像关系型数据库，SQL 引擎独立于数据存储系统（相对而言，关系型数据库将查询引擎和存储绑定到一个单独的紧耦合系统中），提供了更大的灵活性，尽管存在潜在的性能损失。
+
+下面的图中展示了主要的SQL 引擎的流行程度，数据由奥地利咨询公司Solid IT 维护的DB-Engines 提供。DB-Engines 每月为超过200个数据库系统计算流行得分。得分反应了搜索引擎的查询，在线讨论的提及，提供的工作，专业资历的提及，以及tweets。
+
+https://db-engines.com/en/ranking
+
+虽然Impala、Spark SQL、Drill、Hawq 和Presto 一直在运行性能、并发量和吞吐量上击败Hive，但是Hive 仍然是最流行的（至少根据DB-Engines 的标准）。原因有3个：
+
+* Hive 是Hadoop 的默认SQL 选项，每个版本都支持。而其他的要求特定的供应商和合适的用户；
+* Hive 已经在减少和其他引擎的性能差距。大多数Hive 的替代者在2012年推出，当Impala、Spark、Drill 等大步发展的时候，Hive只是慢慢改进。现在，虽然Hive 不是最快的选择，但是它比五年前要好得多；
+* 虽然速度很重要，但是海量数据下查询的稳定性更重要。
+
+对于开源项目来说，最佳的健康度量是它的活跃开发者社区的大小。如下图所示，Hive 和Presto 有最大的贡献者基础。（Spark SQL 的数据暂缺）
+数据来源：[Open Hub](https://www.openhub.net/)
+
+### Apache Hive
+
+Apache Hive 是Hadoop 生态系统中的第一个SQL 框架。Facebook 的工程师在2007年介绍了Hive，并在2008年将代码捐献给Apache 软件基金会。2010年9月，Hive 毕业成为Apache 顶级项目。Hadoop 生态系统中的每个主要参与者都发布和支持Hive，包括Cloudera、MapR、Hortonworks 和IBM。Amazon Web Services 在Elastic MapReduce（EMR）中提供了Hive 的修改版作为云服务。
+
+早期发布的Hive 使用MapReduce 运行查询。复杂查询需要多次传递数据，这会降低性能。所以Hive 不适合交互式分析。由Hortonworks 领导的Stinger 明显的提高了Hive 的性能，尤其是通过使用Apache Tez，一个精简MapReduce 代码的应用框架。Tez 和ORCfile，一种新的存储格式，对Hive 的查询产生了明显的提速。
+
+Cloudera 实验室带领一个并行项目重新设计Hive 的后端，使其运行在Apache Spark 上。经过长期测试后，Cloudera 在2016年初发布了Hive-on-Spark 的正式版本。
+
+在2016年，Hive 有100多人的贡献者。该团队在2月份发布了Hive 2.0，并在6月份发布了Hive 2.1。Hive 2.0 的改进包括了对Hive-on-Spark 的多个改进，以及性能、可用性、可支持性和稳定性增强。Hive 2.1 包括了Hive LLAP（”Live Long and Process“），它结合持久化的查询服务器和优化后的内存缓存，来实现高性能。该团队声称提高了25倍。
+
+9月，Hivemall 项目进入了Apache 孵化器，Hivemall 最初由Treasure Data 开发并捐献给Apache 软件基金会，它是一个可扩展的机器学习库，通过一系列的Hive UDF 来实现，设计用于在Hive、Pig 和Spark SQL 上运行MapReduce。该团队计划在2017年第一季度发布了第一个版本。
+
+### Apache Impala
+
+2012年，Cloudera 推出了Impala，一个开源的MPP SQL 引擎，作为Hive 的高性能替代品。Impala 使用HDFS 和HBase，并利用了Hive 元数据。但是，它绕开了使用MapReduce 运行查询。
+
+Cloudera 的首席战略官Mike Olson 在2013年底说到Hive 的架构是有根本缺陷的。在他看来，开发者只能用一种全新的方式来实现高性能SQL，例如Impala。2014年的1月、5月和9月，Cloudera 发布了一系列的基准测试。在这些测试中，Impala 展示了其在查询运行的逐步改进，并且显著优于基于Tez 的Hive、Spark SQL 和Presto。除了运行快速，Impala 在并发行、吞吐量和可扩展性上也表现优秀。2015年，Cloudera 将Impala 捐献给Apache 软件基金会，进入了Apache 孵化计划。Cloudera、MapR、Oracle 和Amazon Web Services 分发Impala，Cloudera、MapR 和Oracle 提供了商业构建和安装支持。
+
+2016年，Impala 在Apache 孵化器中取得了稳步发展。该团队清理了代码，将其迁移到Apache 基础架构，并在10月份发布了第一个Apache 版本2.7.0。新版本包括了性能提升和可扩展性改进，以及一些其他小的增强。
+
+### Spark SQL
+
+Spark SQL 是Spark 用于结构化数据处理的组件。Apache Spark 团队 在2014年发布了Spark SQL，并吸收了一个叫Shark 的早期的Hive-on-Spark 项目。它迅速成为最广泛使用的Spark 模块。
+
+Spark SQL 用户可以运行SQL 查询，从Hive 中读取数据，或者使用它来创建Spark Dataset和DataFrame（Dataset 是分布式的数据集合，DataFrame 是统一命名的Dataset 列）。Spark SQL 的接口向Spark 提供了数据结构和执行操作的信息，Spark 的Catalyst 优化器使用这些信息来构造一个高效的查询。
+
+2015年，Spark 的机器学习开发人员引入了ML API，一个利用Spark DataFrame 代替低级别Spark RDD API 的包。这种方法被证明是有吸引力和富有成果的；2016年，随着2.0 的发布，Spark 团队将基于RDD 的API改为维护模式。DataFrame API现在是Spark 机器学习的主要接口。
+
+此外，在2016年，该团队还在Spark 2.1.0的Alpha 版本中发布了结构化的流式处理。结构化的流式处理是构建在Spark SQL 上的一个流处理引擎。用户可以像对待静态源一样，用同样的方式查询流式数据源，并且可以在单个查询中组合流式和静态源。Spark SQL 持续运行查询，并且在流式数据到达的时候更新结果。结构化的流通过检查点和预写日志来提供一次性的容错保障。
+
+### Apache Drill
+
+2012年，由Hadoop 分销商的领导者之一MapR 领导的一个团队，提出构建一个Google Dremel 的开源版本，一个交互式的分布式热点分析系统。他们将其命名为Apache Drill。Drill 在Apache 孵化器中被冷落了两年多，最终在2014年底毕业。该团队在2015年发布了1.0。
+
+MapR 分发和支持Apache Drill。2016年，超过50个人对Drill 做出了贡献。该团队在2016年发布了5个小版本，关键的增强功能包括：
+
+Web 认证
+支持Apache Kudu 列数据库
+支持HBase 1.x
+动态UDF 支持
+2015年，两位关键的Drill 贡献者离开了MapR，并启动了Dremio，该项目尚未发布。
+
+### Apache HAWQ
+
+Pivotal 软件在2012年推出了一款商业许可的高性能SQL 引擎[HAWQ](http://hawq.incubator.apache.org)，并在尝试市场营销时取得了小小的成功。改变战略后，Pivotal 在2015年6月将项目捐献给了Apache，并于2015年9月进入了Apache 孵化器程序。
+
+15个月之后，HAWQ 仍然待在孵化器中。2016年12月，该团队发布了HAWQ 2.0.0.0，加入了一些错误修复。他可能会在2017年毕业成为正式项目。
+
+HAWQ 的一个特点是它支持Apache MADlib，一个同样在孵化器中的SQL 机器学习项目。HAWQ 和MADlib 的组合，应该是对购买了Greenplum 的人是一个很好的安慰。
+
+HAWQ部署：
+
+![hawq_high_level_architecture](media/32-DistributedSQLTransation/hawq_high_level_architecture.png)
+
+HAWQ组件：
+
+![hawq_architecture_components](media/32-DistributedSQLTransation/hawq_architecture_components.png)
+
+
+### Presto
+
+Facebook 工程师在2012年发起了Presto 项目，作为Hive 的一个快速交互的取代。在2013年推出时，成功的支持了超过1000个Facebook 用户和每天超过30000个PB级数据的查询。2013年Facebook 开源了Presto。
+
+Presto 支持多种数据源的ANSI SQL 查询，包括Hive、Cassandra、关系型数据库和专有文件系统（例如Amazon Web Service 的S3）。Presto 的查询可以联合多个数据源。用户可以通过C、Java、Node.js、PHP、Python、R和Ruby 来提交查询。
+
+Airpal 是Airbnb 开发的一个基于web 的查询工具，让用户可以通过浏览器来提交查询到Presto。Qubole 位Presto 提供了管理服务。AWS 在EMR 上提供Presto 服务。
+
+2015年6月，Teradata 宣布计划开发和支持该项目。根据宣布的三阶段计划，Teredata 提出将Presto 集成导Hadoop 生态系统中，能够在YARN 中进行操作，并且通过ODBC 和JDBC 增强连接性。Teredata 提供了自己的Presto 发行版，附带一份数据表。2016年6月，Teradata 宣布了Information Builders、Looker、Qlik、Tableau 和ZoomData 的鉴定结果，以及正在进行中的MicroStrategy 和Microsoft Power BI。
+
+Presto 是一个非常活跃的项目，有一个巨大的和充满活力的贡献者社区。该团队发布的速度非常快--2016年共发布了42个版本。
+
+### Apache Calcite
+
+Apache Calcite 是一个开源的数据库构建框架。它包括：
+
+* SQL 解析器、验证器和JDBC 驱动
+* 查询优化工具，包括关系代数API，基于规则的计划器和基于成本的查询优化器
+* Apache Hive 使用Calcite 进行基于成本的查询优化，而Apache Drill 和Apache Kylin 使用SQL 解析器。
+
+Calcite 团队在2016年推出了5个版本包括bug 修复和用于Cassandra、Druid 和Elasticsearch 的新适配器。
+
+### Apache Kylin
+
+[Apache Kylin](http://kylin.apache.org/cn/) 是一个具有SQL 接口的OLAP 引擎。由eBay 开发并捐献给Apache，Kylin于2014年10月在github开源，并在2014年11月加入Apache孵化器，Kylin 在2015年毕业成为顶级项目。
+
+2016年3月，Apache Kylin核心开发成员创建成立的创业公司Kyligence 提供商业支持的数据仓库产品KAP （Kyligence Analytics Platform）。
+
+![kylin_diagram](media/32-DistributedSQLTransation/kylin_diagram.png)
+
+### Apache Phoenix
+
+Apache Phoenix 是一个运行在HBase 上的SQL 框架，绕过了MapReduce。Salesforce 开发了该软件并在2013年捐献给了Apache。2014年5月项目毕业成为顶级项目。Hortonworks 的Hortonworks 数据平台中包含该项目。自从领先的SQL 引擎都适配HBase 之后，Phoenix的重要性大大下降。
+
+### Apache Tajo
+
+Apache Tajo 是Gruter 在2011年推出的一个快速SQL 数据仓库框架，一个大数据基础设施公司，并在2013年捐献给Apache。2014年Tajo 毕业成为顶级项目。在作为Gruter 主要市场的韩国之外，该项目很少吸引到预期用户和贡献者的兴趣。
+
+### Apache Trafodion
+
+[Apache Trafodion](http://trafodion.incubator.apache.org/) 是另一个SQL-on-HBase 项目，由HP 实验室构思，它告诉你几乎所有你需要知道的。2014年6月HP 发布Trafodion，一个月之后，Apache Phoenix 毕业。6个月之后，HP 的高管们认为相对于另一款SQL-on-HBase 引擎，它的商业潜力有限，所以他们将项目捐献给了Apache，项目于2015年5月进入孵化器。
+
+如果孵化结束，Trafodion 承诺成为一个事务数据库。
+
+![Trafodion process architecture](media/32-DistributedSQLTransation/Trafodion_process_architecture.png)
+
 
 ## 基础技术原理和名称术语
 
@@ -224,7 +379,7 @@ Base = Basically Available + Soft state + Eventuallyconsistent 基本可用性+�
 * 单调读一致性
 * 单调写一致性
 
-## 分布式存储算法和技术实现（Atomic）
+## 分布式存储算法和技术实现
 
 ### 分布式系统的定义
 
@@ -234,9 +389,9 @@ Base = Basically Available + Soft state + Eventuallyconsistent 基本可用性+�
 
 ​从狭义上来说，分布式系统是建立在网络之上的软件系统。一个分布式系统由多个计算节点组成，每个节点承担一定的计算和存储，节点之间通过网络连接到一起，协同工作形成一个整体。因此，整个系统中发生的事件可能会同时发生。从广义上来说，就如上面Leslie Lamport所说的那样，是个非常相对的概念，对于用户来说，可以看成一个非分布式系统，对于设计分布式系统的工程师来说，则肯定是一个分布式系统。很多早期的分布式研究都是从更加微观的多路处理器的研究开始的, 发展到现在分布式更多的是指狭义上的分布式系统，即多个计算机节点通过网络组成的分布式集群之上的软件，例如分布式数据库。但无论是狭义还是广义的分布式系统, 并发一致性一直是分布式系统的核心问题。一致性不是简单的让两个节点最终对一个值的结果一致, 很多时候还需要对这个值的变化历史在不同节点上的观点也要一致。主要看设计的分布式系统的需要，就像前面BASE理论里说的那样，需要采用适当的方法来满足分布式系统的最终一致性。例如一个变量在一个节点中体现的状态可能是由1->2->3->4这个顺序变化最终变成状态4的，在另一个节点，体现的状态可能是1->2->4。根据应用场景，有可能没有问题，有可能会存在着严重的问题。而这种问题产生的原因可能是网络，也可能是其他的问题。以网络举例，计算机网络大多数都是异步的，异步网络的延时、顺序、可靠性都不可保证，如果发生网络问题，重连的网络也有可能不能保证接收到的消息是按真实的时间顺序接收的。因此，对于分布式系统来说，并发一致性一直是分布式系统的核心问题。
 
-### 一致性的基础知识
+### 分布式系统中的一致性问题
 
-#### 一致性问题
+#### 一致性问题简介
 
 详细分布式一致性问题可参考[Solved Problems, Unsolved Problems and Problems in Concurrency](http://research.microsoft.com/en-us/um/people/lamport/pubs/solved-and-unsolved.pdf)
 
@@ -280,13 +435,13 @@ Base = Basically Available + Soft state + Eventuallyconsistent 基本可用性+�
 
 **参考** [The Byzantine Generals Problem](http://research.microsoft.com/en-us/um/people/lamport/pubs/byz.pdf)
 
-**FLP定理**
+#### 一致性基本概念
+
+- FLP定理
 
 FLP定理(FLP impossibility)已经证明在一个收窄的模型中(异步环境并只存在节点宕机)，不能同时满足强一致和可用性。强一致：它要求所有节点状态一致、共进退；可用：它要求分布式系统24*7无间断对外服务。工程实践上根据具体的业务场景，或保证强一致，或在节点宕机、网络分化的时候保证可用。总要在一致性和可用上做一定的取舍。
 
 [Impossibility of Distributed Consensus with One Faulty Process](http://cs-www.cs.yale.edu/homes/arvind/cs425/doc/fischer.pdf)
-
-#### 一致性基本概念
 
 - XA
 
@@ -386,282 +541,6 @@ XA 是指由 X/Open 组织提出的分布式交易处理的规范。XA规范主�
 同2PC的事务回滚请求
 
 参考[维基百科中文](https://zh.wikipedia.org/wiki/%E4%B8%89%E9%98%B6%E6%AE%B5%E6%8F%90%E4%BA%A4)，[维基百科英文](https://en.wikipedia.org/wiki/Three-phase_commit_protocol)
-
-####  选举、多数派、租约
-
-选举、多数派、租约都是分布式系统中最常见的问题，也是分布式系统实现的基础，很多分布式系统组件中都存在这三个概念，例如zookeeper的实现，甚至现代分布式协议或算法都需要或依赖于选举、多数派及租约。
-
-选举（election）通过打破节点间的对等关系，选得的leader(或叫master、coordinator)也即2PC/3PC中的协调者，有助于实现事务原子性、提升决议效率。
-
-多数派(quorum)帮助我们在网络分化的情况下达成决议一致性，在leader选举的场景下帮助我们选出唯一leader。
-
-租约(lease)在一定期限内给予节点特定权利，也可以用于实现leader选举。
-
-**选举**
-
-在分布式系统出现故障后，通常需要重新组织活动的节点使它们继续执行有用的任务。在这个重新组织和配置的过程中，第一步就是要选出一个协调者来管理这些操作。故障的检测通常是基于超时机制的。如果一个进程超过一定的时间没有收到协调者的响应，它就怀疑协调者出了故障并启动选举过程。选举在集群服务器、负载均衡、重复数据更新、应急恢复、连接组和互斥等领域都有广泛应用。一般来说，选举过程包括两步：一、选择一个具有最高优先级的leader，二、通知其他进程谁是leader。
-
-选举算法的分类：
-
-1. 基于环形拓扑的（环算法），其中每个进程不知道其它进程的优先级。
-2. 基于全连接拓扑的，其中每个进程知道其它进程的优先级。
-3. 基于非比较的，其中消息被“编码”在以轮表示的时间中，这种类型的算法只能工作在同步系统中。 
-
-其中最常用的算法是1982年由Hector Garcia-Molina提出的[Bully算法](http://homepage.divms.uiowa.edu/~ghosh/Bully.pdf)，其要求每个节点对应一个序号，序号最高的节点为leader。leader宕机后次高序号的节点被重选为leader。
-
-当任何一个节点发现协调者不响应请求时，他发起一次选举，选举过程如下：
-
-1. 发现协调者不响应的节点向所有编号比他大的节点发送一个选举消息
-2. 如果无人响应，则该节点获胜，成为协调者
-3. 如果编号比他大的节点响应，则由响应者接管选举工作，该节点的工作完成。在由响应者循环1-3步直到最大编号节点胜出。
-
-任何一个时刻，一个节点只能从编号比他小的节点接受选举消息，当消息到达时，接受者发送一个OK消息给发送者，表明它在运行，接管工作。最终除了编号最大的一个节点外，其他节点都放弃，那个节点就是新的协调者。他将获胜消息发送给其他所有节点，通知他们自己为新的协调者。当一个以前宕机的节点恢复过来了后，它将主持一场选举。如果该节点恰好是当前运行节点中编号最大的进程，它将获胜。因此，此算法称为Bully算法。
-
-**多数派**
-
-  当分布式环境下出现网络分化时，由于出现了网络隔离，隔离之后会有多个节点都认为自己具有最大编号，将会产生多个协调者，所以引入了[多数派](https://ecommons.cornell.edu/bitstream/handle/1813/6323/82-483.pdf?sequence=1)这个概念。多数派确保了在网络隔离情况下的leader的唯一性。假如节点总数为2X+1，则一项选举得到多于 X 节点赞成才能获得通过。leader选举中，网络分化场景下只有具备多数派节点的部分才可能选出leader，这避免了多leader的产生。因此，一般要保证分布式一致性，参与选举的节点数在集群中都要指定为单数个。
-
-**租约**
-
-在一个分布式系统中何时发起重新选举呢？最先可能想到会通过心跳(heart beat)判别leader状态是否正常，但在网络拥堵或瞬断的情况下，leader状态可能不正常，但堵塞或瞬断结束后又正常，而这时，已经完成了选举，这容易导致出现双leader的情况。因此，引入了租约的概念。
-
-租约的中心思想是每个租约时长内只有一个节点获得租约、到期后必须重新颁发租约。假设我们有一个租约颁发节点，节点在租约颁发节点上注册自己，租约颁发节点按选举颁发租约给节点，使节点成为leader，在租约期内，即使leader节点宕机，也不进行重新选举，到期后重新选举，颁发租约并确定leader。
-
-在实际应用中，zookeeper、ectd均存在租约颁发。
-
-#### 分布式系统的时间
-
-##### 时间、时钟和时序
-
-分布式系统下需要记录和比较不同节点间事件发生的顺序，但不同于现实生活中使用物理时钟记录时间，分布式系统使用逻辑时钟记录事件顺序关系。为什么不适用物理时钟呢，这是由于现实生活中物理时间有统一的标准，而分布式系统中每个节点记录的时间并不一样，即使设置了 NTP 时间同步节点间也存在毫秒级别的偏差。并且存在网络的原因，一旦延时，可能会使事件乱序。
-
-因此，分布式系统需要有另外的方法记录事件顺序关系，这就是逻辑时钟。
-
-##### Logic Clock （Lamport Clock）
-  
-Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为[Lamport时间戳](https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system/?from=http%3A%2F%2Fresearch.microsoft.com%2Fen-us%2Fum%2Fpeople%2Flamport%2Fpubs%2Ftime-clocks.pdf)
-    
- (Lamport timestamps或Lamport Clock)。
-
-分布式系统中按是否存在节点交互事件可分为三类事件，节点内部，发送事件，接收事件。
-
-Lamport Clock包含下列规则：
-
-1. 每个事件对应一个Lamport时间戳，初始值为0
-2. 在节点内发生的事件，时间戳加1。
-3. 如果事件属于发送事件，时间戳加1并在消息中带上该时间戳
-4. 如果事件属于接收事件，时间戳由本地时间戳与消息中带的时间戳中取最大值加1。
-
-Happend-before（->）的定义：
-
-Lamport在文章中首先定义了一种关系，叫做Happend-before，用->表示。两个事件a，b满足下面任一条件，则记作a->b：
-
-1. 如果a b是在同一进程内的两个事件，并且a发生在b之前，那么a->b
-2. 如果a代表了某个进程的消息发送事件，b代表另一进程中针对这同一个消息的接收事件，那么a->b
-
-Happend-before目的是在不依赖于物理时钟确定在离散系统中各个events的发生次序。
-
-如下图所示：
-
-![Happend-before](media/32-DistributedSQLTransation/Happend-before.png)
-
-P和Q是两个独立的进程，也可以理解为分布式系统中的两台服务器；时间从上往下递增，圆圈表示事件。图中红色的箭头就是上述的Happend-before关系。a,b和e,f分别是同一进程中的先后两个事件，满足条件1，b和f分别是消息的发送事件和接受事件，满足条件2。那么事件a和e，b和e，分别是什么关系呢？其实他们之间没有因果关系，可以认为他们是并发的。正因为他们没有因果关系，所以从系统的角度来看，他们谁发生在前谁发生在后不重要，只要能辨别清楚有因果关系的事件，使得因果关系不会倒转，那么整个分布式系统就可认为是正确的，至少从逻辑上不会很出错。至于那些没有因果关系的并发事件，不用关注他们的先后顺序。
-
-Logical Clock解决的问题是找到一种方法，给分布式系统中所有时间定一个序，这个序能够正确地排列出具有因果关系的事件（**注意，是不能保证并发事件的真实顺序的**），使得分布式系统在逻辑上不会发生因果倒置的错误。
-
-全序关系（=>）的定义
-
-给系统中所有的事件打上一个时间戳（个递增的序号）。每个进程维护一个自己的时间戳，时间戳的增加遵循下面两点规则：
-
-* 如果两个事件发生在同一个进程上，并且不是接受消息的事件，那么后面事件的时间戳为前面的+1
-* 如果一个事件是接受消息，那么他的时间戳为本进程前续事件的时间戳与接受到的消息的时间戳中较大者+1
-
-![LogicalClock](media/32-DistributedSQLTransation/LogicalClock.png)
-
-上图展示了打完时间戳后的样子，可见这个时间戳确保了在因果条件的事件中是递增的。但是并发的事件（如a和e），他们的时间戳是没有可比性的，谁大谁小说明不了问题。记C(a)为事件a的时间戳，那么：
-
-若a->b，即a与b有因果关系，那么C(a)>C(b)
-若a与b没有因果关系，那么C(a)与C(b)可能是任意关系（大于 小于 等于）
-
-也就是说，根据这个时间戳，是没法反过来推断事件发生的真实顺序的，因为对于并发事件来说，虽然C(a)>C(b)，但也许a与b的真实顺序是t(a) < t(b)。
-那么C(a)>C(b)就没有意义了？换个角度想想，既然上面说过，并发事件的顺序不重要，不会影响系统的正确性，那么我们随意定一个顺序不就完了吗？就当作时间戳大的事件肯定是发生在后面，时间戳小的事件肯定是发生在前面，这样一来不就统一了因果事件和并发事件的排序了吗？但是还有一个问题，两个并发事件的时间戳一样怎么办？那就再加一层假定，给分布式系统中的服务器编号，当两个时间戳一样时，编号小的服务器就当他发生在先。
-
-总结一下上面说的，我们可以定义这样一个全序关系”=>”：假设a是进程Pi中事件，b是进程Pj中的事件，那么当且仅当满足如下条件之一时:(1)Ci(a)<Cj(b);(2)Ci(a)=Cj(b)且Pi<Pj，那么我们就认为“a=>b”。
-
-但是至少这个方法给出了一个定义分布式系统中事件顺序的方法，他确保的是所有因果关系的事件不会发生逻辑错误，但他并不保证系统的公平性（比如两台服务器同时并发地请求一个资源，物理时间上先发出请求的进程不一定会先得到这个资源。但这顶多会造成不公平，不会造成错误）。
-
-复杂的例子：
-
-![Lamport-clock1](media/32-DistributedSQLTransation/Lamport-clock1.png)
-
-由下图可以看到各事件的时间戳，但也可以看到其中c、d和e、g具有相同的时间戳，这时候，需要将节点A、B、C进行编号，相同时间戳取按节点编号顺序排列，所以c=>d,e=>g，由此可以得到事件的全序关系：a->b->c=>d->e=>g->f->h。
-
-![Lamport-clock2](media/32-DistributedSQLTransation/Lamport-clock2.png)
-
-
-可以看到Lamport timestamps是存在一些问题的，它确保了所有因果关系不会出现逻辑错误，但是不能保证系统的公平性。
-
-在Logic Clock之后，人们又引入了Vector Clock，但vector clock也有logic clock同样的问题，不能依据真实的时间来查询。
-
-Logical Clock应用：
-
-怎么利用Logical Clock保证日志的顺序正确呢？
-
-Lamport在论文的后半部分提出了一个算法，可以解决这个问题。但是这个算法基于一个前提：对于任意的两个进程Pi和Pj，它们之间传递的消息是按照发送顺序被接收到的。这个假设并不过分，TCP就可以满足要求。
-
-首先，每个进程会维护各自在本地维护一个请求队列。算法是由如下5个规则定义的：（方便起见，每条规则定义的行为会被做为一个独立事件）
-
-1. 为请求该项资源（在这个问题中，资源就是日志服务器），进程Pi发送一个(Tm,Pi)资源请求消息给其他所有进程，并将该消息放入自己的请求队列，在这里Tm代表了消息的时间戳；
-
-2. 当进程Pj收到(Tm,Pi)资源请求消息后，将它放到自己的请求队列中，并发送一个带时间戳的确认消息给Pi。(注：如果Pj已经发送了一个时间戳大于Tm的消息，那就可以不发送)；
-
-3. 释放该项资源时，进程Pi从自己的消息队列中删除(Tm,Pi)资源请求，同时给其他所有进程发送一个带有时间戳的Pi资源释放消息；
-
-4. 当进程Pj收到Pi资源释放消息后，它就从自己的消息队列中删除(Tm,Pi)资源请求
-
-5. 当同时满足如下两个条件时，就将资源分配给进程Pi：
-* 按照“=>”关系排序后，(Tm,Pi)资源请求排在它的请求队列的最前面
-* Pi已经从所有其他进程都收到了时间戳>Tm的消息
-
-为什么这个算法可以保证日志服务器能被按照正确的顺序分配呢？参看第5条规则中的两个条件，只有当一个进程收到所有其他进程>Tm的消息后才会对自己的队列进行排序。那么如果其他进程在他之前请求了这个资源，但是由于网络慢还没收到，怎么办？因为前面已经提出假设，对于任意的两个进程Pi和Pj，它们之间传递的消息是按照发送顺序被接收到的。所以既然收到>Tm消息，那么说明其他所有进程在Tm之前的消息也都已经被收到了，所以这个时候自己的队列中肯定已经收到了所有的对资源的请求，这个时候只需要按照“=>”关系排序，排在最前面的就是最先发出请求的。
-
-可见利用Logical Clock确实可以解决这种问题。那么我们再来看另一种问题。假设一个购票系统后台架构如下图所示：
-
-![LogicalClockLog](media/32-DistributedSQLTransation/LogicalClockLog.jpg)
-
-有多台前端代理服务器，用户请求会随机地分配到各个代理服务器上。如果小明在物理时间7点50下单买了一本书，大明在7点51分下单，正好书只有一本。小明的请求被分配到了服务器A，大明的被分配到了服务器B。如果在这之前，A的Logical Clock走到了200，而B的Logical Clock走到150。那么在这个情况下，如果运用上述算法，B会先获得资源，下单买到票。所以从道理上说，这个算法是不公平的，但是换个角度想想，这样充其量也只是不公平，不会导致系统发生因果错误。因为小明和大明的请求在系统看来是并发事件，没有因果关系，所以系统无法判定并发事件的真实顺序。
-
-##### Vector Clock
-
-Lamport timestamps存在并发公平性问题，所以演进出另一种逻辑时钟方法，即[Vector clock](http://www.vs.inf.ethz.ch/publ/papers/VirtTimeGlobStates.pdf)。
-
-Vector clock可以解决并发公平性问题，它通过vector结构不但记录本节点的Lamport时间戳，同时也记录了其他节点的Lamport时间戳。Vector clock的原理与Lamport时间戳类似，如图：
-
-![Vector_Clock](media/32-DistributedSQLTransation/500px-Vector_Clock.svg.png)
-
-假设有事件a、b分别在节点P、Q上发生，Vector clock分别为Ta、Tb，如果 Tb[Q] > Ta[Q] 并且 Tb[P] >= Ta[P]，则a发生于b之前，记作 a -> b。那Vector clock怎么判别同时发生关系呢？
-
-如果 Tb[Q] > Ta[Q] 并且 Tb[P] < Ta[P]，则认为a、b同时发生，记作 a <-> b。例如图2中节点B上的第4个事件 (A:2，B:4，C:1) 与节点C上的第2个事件 (B:3，C:2) 没有因果关系、属于同时发生事件。
-
-Vector clocks允许为事件的部分因果排序。有图可知，基于Vector clock我们可以获得任意两个事件的顺序关系，结果或为先后顺序或为同时发生，识别事件顺序在工程实践中有很重要的引申应用，
-
-下面以一个[简单的例子](http://basho.com/posts/technical/why-vector-clocks-are-easy/)说明：
-
-Alice, Ben, Cathy, 和 Dave计划下周要一起吃聚餐，首先四个人通过邮件商量聚餐的时间：
-1. Alice首先建议他们在周三见面。
-2. 稍后， Dave 与Cathy经过讨论，他们决定在星期四。
-3. Dave同时与Ben在邮件中确认在星期二见面。
-4. 当Alice收集所有人的反馈，看是否还是在周三见面时，她得到了混合消息：
-  - Cathy反馈说她和Dave决定在星期四；
-  - Ben反馈他和Dave决定在星期二；
-  - Dave没有反馈，而且不知道Catby和Ben分别与Deve确定时间的先后顺序。
-
-最终 ，没人能确认这些讨论何时发生的，并且也都不能确认到底应该在周二还是周四晚餐。
-
-与这个例子类似，结果都是相同的，当你去询问两个人信息时，如果他们给你的是不同的反馈，没有人能确认哪条才是最新的反馈。
-
-利用vector clocks解决这个问题，从Alice开始初始化整个事件：
-
-```
-date = Wednesday
-vclock = Alice:1
-```
-
-Alice将此作为第一个版本的信息，并发送信息通知给每个人。
-此时 Dave 与Cathy开始讨论，Cathy建议：
-
-```
-date = Thursday
-vclock = Alice:1, Cathy:1
-```
-
-Dave 没管Alice的建议，但是将其作为第一个版本信息记录下来了，并接收到Cathy的建议：
-
-```
-date = Thursday
-vclock = Alice:1, Cathy:1, Dave:1
-```
-
-并将信息反馈给了Cathy，Cathy记录下这些信息，由于此时Ben没有收到Dave和Cathy的反馈，只接收到了Alice的建议，这时Ben开始反馈他的建议给Dave：
-```
-date = Tuesday 
-clock = Alice:1, Ben:1
-```
-Dave将发现冲突：
-```
-date = Thursday
-vclock = Alice:1, Cathy:1, Dave:1
-
-date = Tuesday 
-vclock = Alice:1, Ben:1
-```
-Dave通过比对两份消息的vclock可以发现冲突，两个结果无法确认哪个是最新的版本。这是因为上边两个版本的vclock都不是对方的“祖先”。其中vector clock对祖先的定义是这样的：当我们说vclock A是vclock B的祖先时，当且仅当A中的每一个标记ID都存在于B中，同时A中对应的标记版本号要小于等于B。对于标记ID不存在的情况，可以认为标记版本号为0。
-
-Dave通过对比vclock的方式发现了版本冲突，于是尝试解决冲突。两个版本中只能选择一个，于是他选择了时间为周四的，那么这条消息可以表示为：
-
-```
-date = Thursday
-vclock = Alice:1, Cathy:1, Ben:1, Dave:2
-```
-
-Dave在vclock中加上了两个消息中的全部标记ID（Alice，Ben，Catby，Dave），同时将自己对应的版本号加1。然后将这条消息发送给Ben。
-
-最后当Alice从Catby和Ben收集反馈消息的时候（此时Dave联系不上），收到如下消息：
-
-来自Catby的：
-```
-date = Thursday
-vclock = Alice:1, Cathy:1, Dave:1
-```
-来自Ben的：
-```
-date = Thursday
-vclock = Alice:1, Cathy:1, Ben:1, Dave:2
-```
-
- 这时Dave的信息版本已经变为了2，即使Dave没有反馈，Alice也会知道Ben反馈的是最新信息，而Cathy的是以前的信息。
- ​
- #####  Version vectors
- 
- Version vectors是Vector clock的一个变种，实现上与Vector clock类似，目的用于发现数据冲突。
- 
- 分布式系统中数据一般存在多个副本，多个副本可能被同时更新，这会引起副本间数据不一致。每一个副本节点对于一个文件保存一个版本向量 version vectors，Version vectors用来记录不同节点对于该文件的修改。向量含有N个元素，N为拥有该文件的节点数。向量中每一个元素，比如(Si : vi )表示，节点Si上对文件f进行了共vi次修改。通过比较不同节点保存的version vectors向量可以发现节点间的更新冲突。
- 
- Vector clock只用于发现数据冲突，不能解决数据冲突。如何解决数据冲突因场景而异，具体方法有以最后更新为准，或将冲突的数据交给client由client端决定如何处理，或通过选举决议事先避免数据冲突的情况发生。 因Vector Clock算法需维护一个副本节点数长度的版本向量，造成对节点的动态加入不灵活，以及当副本节点不断增长时，进行副本管理的数据量也会不断增长。
-
- > amazon的分布式存储引擎Dynamo早期就是通过Version vectors来构建同一对象多个事件的部分有序的时序集合。现在的amazon dynamo早已摒弃了version vectors，而采用了synchronous replication（类似paxos的protocol））。
-
-  ##### True Time
-
-NTP是有误差的，而且NTP还可能出现时间回退的情况，所以我们不能直接依赖NTP来确定一个事件发生的时间。在Google Spanner里面，通过引入True Time来解决了分布式时间问题。
-
-Google Spanner的关键技术是TrueTime API（具有原子时钟和GPS）。TrueTime API直观的揭示了时钟的不可靠性，它运行提供的边界更决定了时间标记。
-
-Spanner通过使用GPS + Atomic Clock来对集群的机器进行校时，精度误差范围能控制在ms级别，通过提供一套TrueTime API给外面使用。
-
-虽然spanner引入了TrueTime可以得到全球范围的时序一致性，但相关事务在提交的时候会有一个wait时间ε（ε表示一个无限接近于0的一个无限小的正数），只是这个时间很短，而且spanner后续都准备将其优化到 ε < 1ms，也就是对于关联事务，仅仅在上一个事务commit之后等待2ms之后就能执行。
-
-spanner有一个最大的问题，TrueTime是基于硬件的，而现在对于很多企业来说，是没有办法实现这套部署的。
-
-##### Hybrid Logic Clock
-
-CockroachDB使用了一个叫[HLC](http://www.cse.buffalo.edu/tech-reports/2014-04.pdf)（hybird logic clocks）算法来解决分布式时间的问题，在保持逻辑时钟的特点的同时又逼近真实事件。
-
-HLC是基于NTP的，但它只会读取当前系统时间，而不会去修改，同时HLC又能保证在NTP出现同步问题的时候仍能够很好的进行容错处理。对于一个HLC的时间t来时，它总是大于等于当前的系统时间，并且与其在一个很小的误差范围里面，也就是 |l - pt| < ε。
-
-HLC由两部分组成，physical clock + logic clock，l.j维护的是节点j当前已知的最大的物理时间，c.j则是当前的逻辑时间。那么判断两个事件的先后顺序就很容易了，先判断物理时间pt，在判断逻辑时间ct。
-
-HLC虽然方便，它毕竟是基于NTP的，所以如果NTP出现了问题，可能导致HLC与当前系统pt的时间误差过大，其实已经不怎么精确了，HLC论文提到对于一些out of bounds的message可以直接忽略，然后加个log让人工后续处理，而cockroachdb是直接打印了一个warning log。
-
-##### TSO
-
-无论上面的Ture Time还是Hybrid Logic Time，都是为了在分布式情况下获取全局唯一时间，如果整个系统不复杂，而且没有spanner那种跨全球的需求，有时候一台中心授时服务就可以了。
-
-在Google Percolator系统中，就提到使用了一个timestamp oracle（TSO）的服务来提供统一的授时服务。
-
-Percolator 是 Google 的上一代分布式事务解决方案，构建在 BigTable 之上，在 Google 内部用于网页索引更新的业务。原理比较简单，总体来说就是一个经过优化的 2PC 的实现，依赖一个单点的授时服务 TSO 来实现单调递增的事务编号生成，提供 SI 的隔离级别。
-
-传统的分布式事务模型中，一般都会有一个中央节点作为事务管理器，Percolator 的模型通过对于锁的优化，去掉了单点的事务管理器的概念，将整个事务模型中的单点局限于授时服务器上，在生产环境中，单点授时是可以接受的，因为 TSO 的逻辑极其简单，只需要保证对于每一个请求返回单调递增的 id 即可，通过一些简单的优化手段（比如 pipeline）性能可以达到每秒生成百万 id 以上，同时 TSO 本身的高可用方案也非常好做，所以整个 Percolator 模型的分布式程度很高。
 
 
 #### 一致性模型
@@ -775,13 +654,289 @@ Percolator 是 Google 的上一代分布式事务解决方案，构建在 BigTab
   >- Strong consistency
 
 
-#### 分布式一致性协议与算法
+### 分布式系统的时间
+
+#### 时间、时钟和时序
+
+分布式系统下需要记录和比较不同节点间事件发生的顺序，但不同于现实生活中使用物理时钟记录时间，分布式系统使用逻辑时钟记录事件顺序关系。为什么不适用物理时钟呢，这是由于现实生活中物理时间有统一的标准，而分布式系统中每个节点记录的时间并不一样，即使设置了 NTP 时间同步节点间也存在毫秒级别的偏差。并且存在网络的原因，一旦延时，可能会使事件乱序。
+
+因此，分布式系统需要有另外的方法记录事件顺序关系，这就是逻辑时钟。
+
+#### Logic Clock （Lamport Clock）
+  
+Leslie Lamport 在1978年提出逻辑时钟的概念，并描述了一种逻辑时钟的表示方法，这个方法被称为[Lamport时间戳](https://www.microsoft.com/en-us/research/publication/time-clocks-ordering-events-distributed-system/?from=http%3A%2F%2Fresearch.microsoft.com%2Fen-us%2Fum%2Fpeople%2Flamport%2Fpubs%2Ftime-clocks.pdf)
+    
+ (Lamport timestamps或Lamport Clock)。
+
+分布式系统中按是否存在节点交互事件可分为三类事件，节点内部，发送事件，接收事件。
+
+Lamport Clock包含下列规则：
+
+1. 每个事件对应一个Lamport时间戳，初始值为0
+2. 在节点内发生的事件，时间戳加1。
+3. 如果事件属于发送事件，时间戳加1并在消息中带上该时间戳
+4. 如果事件属于接收事件，时间戳由本地时间戳与消息中带的时间戳中取最大值加1。
+
+Happend-before（->）的定义：
+
+Lamport在文章中首先定义了一种关系，叫做Happend-before，用->表示。两个事件a，b满足下面任一条件，则记作a->b：
+
+1. 如果a b是在同一进程内的两个事件，并且a发生在b之前，那么a->b
+2. 如果a代表了某个进程的消息发送事件，b代表另一进程中针对这同一个消息的接收事件，那么a->b
+
+Happend-before目的是在不依赖于物理时钟确定在离散系统中各个events的发生次序。
+
+如下图所示：
+
+![Happend-before](media/32-DistributedSQLTransation/Happend-before.png)
+
+P和Q是两个独立的进程，也可以理解为分布式系统中的两台服务器；时间从上往下递增，圆圈表示事件。图中红色的箭头就是上述的Happend-before关系。a,b和e,f分别是同一进程中的先后两个事件，满足条件1，b和f分别是消息的发送事件和接受事件，满足条件2。那么事件a和e，b和e，分别是什么关系呢？其实他们之间没有因果关系，可以认为他们是并发的。正因为他们没有因果关系，所以从系统的角度来看，他们谁发生在前谁发生在后不重要，只要能辨别清楚有因果关系的事件，使得因果关系不会倒转，那么整个分布式系统就可认为是正确的，至少从逻辑上不会很出错。至于那些没有因果关系的并发事件，不用关注他们的先后顺序。
+
+Logical Clock解决的问题是找到一种方法，给分布式系统中所有时间定一个序，这个序能够正确地排列出具有因果关系的事件（**注意，是不能保证并发事件的真实顺序的**），使得分布式系统在逻辑上不会发生因果倒置的错误。
+
+全序关系（=>）的定义
+
+给系统中所有的事件打上一个时间戳（个递增的序号）。每个进程维护一个自己的时间戳，时间戳的增加遵循下面两点规则：
+
+* 如果两个事件发生在同一个进程上，并且不是接受消息的事件，那么后面事件的时间戳为前面的+1
+* 如果一个事件是接受消息，那么他的时间戳为本进程前续事件的时间戳与接受到的消息的时间戳中较大者+1
+
+![LogicalClock](media/32-DistributedSQLTransation/LogicalClock.png)
+
+上图展示了打完时间戳后的样子，可见这个时间戳确保了在因果条件的事件中是递增的。但是并发的事件（如a和e），他们的时间戳是没有可比性的，谁大谁小说明不了问题。记C(a)为事件a的时间戳，那么：
+
+若a->b，即a与b有因果关系，那么C(a)>C(b)
+若a与b没有因果关系，那么C(a)与C(b)可能是任意关系（大于 小于 等于）
+
+也就是说，根据这个时间戳，是没法反过来推断事件发生的真实顺序的，因为对于并发事件来说，虽然C(a)>C(b)，但也许a与b的真实顺序是t(a) < t(b)。
+那么C(a)>C(b)就没有意义了？换个角度想想，既然上面说过，并发事件的顺序不重要，不会影响系统的正确性，那么我们随意定一个顺序不就完了吗？就当作时间戳大的事件肯定是发生在后面，时间戳小的事件肯定是发生在前面，这样一来不就统一了因果事件和并发事件的排序了吗？但是还有一个问题，两个并发事件的时间戳一样怎么办？那就再加一层假定，给分布式系统中的服务器编号，当两个时间戳一样时，编号小的服务器就当他发生在先。
+
+总结一下上面说的，我们可以定义这样一个全序关系”=>”：假设a是进程Pi中事件，b是进程Pj中的事件，那么当且仅当满足如下条件之一时:(1)Ci(a)<Cj(b);(2)Ci(a)=Cj(b)且Pi<Pj，那么我们就认为“a=>b”。
+
+但是至少这个方法给出了一个定义分布式系统中事件顺序的方法，他确保的是所有因果关系的事件不会发生逻辑错误，但他并不保证系统的公平性（比如两台服务器同时并发地请求一个资源，物理时间上先发出请求的进程不一定会先得到这个资源。但这顶多会造成不公平，不会造成错误）。
+
+复杂的例子：
+
+![Lamport-clock1](media/32-DistributedSQLTransation/Lamport-clock1.png)
+
+由下图可以看到各事件的时间戳，但也可以看到其中c、d和e、g具有相同的时间戳，这时候，需要将节点A、B、C进行编号，相同时间戳取按节点编号顺序排列，所以c=>d,e=>g，由此可以得到事件的全序关系：a->b->c=>d->e=>g->f->h。
+
+![Lamport-clock2](media/32-DistributedSQLTransation/Lamport-clock2.png)
+
+
+可以看到Lamport timestamps是存在一些问题的，它确保了所有因果关系不会出现逻辑错误，但是不能保证系统的公平性。
+
+在Logic Clock之后，人们又引入了Vector Clock，但vector clock也有logic clock同样的问题，不能依据真实的时间来查询。
+
+Logical Clock应用：
+
+怎么利用Logical Clock保证日志的顺序正确呢？
+
+Lamport在论文的后半部分提出了一个算法，可以解决这个问题。但是这个算法基于一个前提：对于任意的两个进程Pi和Pj，它们之间传递的消息是按照发送顺序被接收到的。这个假设并不过分，TCP就可以满足要求。
+
+首先，每个进程会维护各自在本地维护一个请求队列。算法是由如下5个规则定义的：（方便起见，每条规则定义的行为会被做为一个独立事件）
+
+1. 为请求该项资源（在这个问题中，资源就是日志服务器），进程Pi发送一个(Tm,Pi)资源请求消息给其他所有进程，并将该消息放入自己的请求队列，在这里Tm代表了消息的时间戳；
+
+2. 当进程Pj收到(Tm,Pi)资源请求消息后，将它放到自己的请求队列中，并发送一个带时间戳的确认消息给Pi。(注：如果Pj已经发送了一个时间戳大于Tm的消息，那就可以不发送)；
+
+3. 释放该项资源时，进程Pi从自己的消息队列中删除(Tm,Pi)资源请求，同时给其他所有进程发送一个带有时间戳的Pi资源释放消息；
+
+4. 当进程Pj收到Pi资源释放消息后，它就从自己的消息队列中删除(Tm,Pi)资源请求
+
+5. 当同时满足如下两个条件时，就将资源分配给进程Pi：
+* 按照“=>”关系排序后，(Tm,Pi)资源请求排在它的请求队列的最前面
+* Pi已经从所有其他进程都收到了时间戳>Tm的消息
+
+为什么这个算法可以保证日志服务器能被按照正确的顺序分配呢？参看第5条规则中的两个条件，只有当一个进程收到所有其他进程>Tm的消息后才会对自己的队列进行排序。那么如果其他进程在他之前请求了这个资源，但是由于网络慢还没收到，怎么办？因为前面已经提出假设，对于任意的两个进程Pi和Pj，它们之间传递的消息是按照发送顺序被接收到的。所以既然收到>Tm消息，那么说明其他所有进程在Tm之前的消息也都已经被收到了，所以这个时候自己的队列中肯定已经收到了所有的对资源的请求，这个时候只需要按照“=>”关系排序，排在最前面的就是最先发出请求的。
+
+可见利用Logical Clock确实可以解决这种问题。那么我们再来看另一种问题。假设一个购票系统后台架构如下图所示：
+
+![LogicalClockLog](media/32-DistributedSQLTransation/LogicalClockLog.jpg)
+
+有多台前端代理服务器，用户请求会随机地分配到各个代理服务器上。如果小明在物理时间7点50下单买了一本书，大明在7点51分下单，正好书只有一本。小明的请求被分配到了服务器A，大明的被分配到了服务器B。如果在这之前，A的Logical Clock走到了200，而B的Logical Clock走到150。那么在这个情况下，如果运用上述算法，B会先获得资源，下单买到票。所以从道理上说，这个算法是不公平的，但是换个角度想想，这样充其量也只是不公平，不会导致系统发生因果错误。因为小明和大明的请求在系统看来是并发事件，没有因果关系，所以系统无法判定并发事件的真实顺序。
+
+#### Vector Clock
+
+Lamport timestamps存在并发公平性问题，所以演进出另一种逻辑时钟方法，即[Vector clock](http://www.vs.inf.ethz.ch/publ/papers/VirtTimeGlobStates.pdf)。
+
+Vector clock可以解决并发公平性问题，它通过vector结构不但记录本节点的Lamport时间戳，同时也记录了其他节点的Lamport时间戳。Vector clock的原理与Lamport时间戳类似，如图：
+
+![Vector_Clock](media/32-DistributedSQLTransation/500px-Vector_Clock.svg.png)
+
+假设有事件a、b分别在节点P、Q上发生，Vector clock分别为Ta、Tb，如果 Tb[Q] > Ta[Q] 并且 Tb[P] >= Ta[P]，则a发生于b之前，记作 a -> b。那Vector clock怎么判别同时发生关系呢？
+
+如果 Tb[Q] > Ta[Q] 并且 Tb[P] < Ta[P]，则认为a、b同时发生，记作 a <-> b。例如图2中节点B上的第4个事件 (A:2，B:4，C:1) 与节点C上的第2个事件 (B:3，C:2) 没有因果关系、属于同时发生事件。
+
+Vector clocks允许为事件的部分因果排序。有图可知，基于Vector clock我们可以获得任意两个事件的顺序关系，结果或为先后顺序或为同时发生，识别事件顺序在工程实践中有很重要的引申应用，
+
+下面以一个[简单的例子](http://basho.com/posts/technical/why-vector-clocks-are-easy/)说明：
+
+Alice, Ben, Cathy, 和 Dave计划下周要一起吃聚餐，首先四个人通过邮件商量聚餐的时间：
+1. Alice首先建议他们在周三见面。
+2. 稍后， Dave 与Cathy经过讨论，他们决定在星期四。
+3. Dave同时与Ben在邮件中确认在星期二见面。
+4. 当Alice收集所有人的反馈，看是否还是在周三见面时，她得到了混合消息：
+  - Cathy反馈说她和Dave决定在星期四；
+  - Ben反馈他和Dave决定在星期二；
+  - Dave没有反馈，而且不知道Catby和Ben分别与Deve确定时间的先后顺序。
+
+最终 ，没人能确认这些讨论何时发生的，并且也都不能确认到底应该在周二还是周四晚餐。
+
+与这个例子类似，结果都是相同的，当你去询问两个人信息时，如果他们给你的是不同的反馈，没有人能确认哪条才是最新的反馈。
+
+利用vector clocks解决这个问题，从Alice开始初始化整个事件：
+
+```
+date = Wednesday
+vclock = Alice:1
+```
+
+Alice将此作为第一个版本的信息，并发送信息通知给每个人。
+此时 Dave 与Cathy开始讨论，Cathy建议：
+
+```
+date = Thursday
+vclock = Alice:1, Cathy:1
+```
+
+Dave 没管Alice的建议，但是将其作为第一个版本信息记录下来了，并接收到Cathy的建议：
+
+```
+date = Thursday
+vclock = Alice:1, Cathy:1, Dave:1
+```
+
+并将信息反馈给了Cathy，Cathy记录下这些信息，由于此时Ben没有收到Dave和Cathy的反馈，只接收到了Alice的建议，这时Ben开始反馈他的建议给Dave：
+```
+date = Tuesday 
+clock = Alice:1, Ben:1
+```
+Dave将发现冲突：
+```
+date = Thursday
+vclock = Alice:1, Cathy:1, Dave:1
+
+date = Tuesday 
+vclock = Alice:1, Ben:1
+```
+Dave通过比对两份消息的vclock可以发现冲突，两个结果无法确认哪个是最新的版本。这是因为上边两个版本的vclock都不是对方的“祖先”。其中vector clock对祖先的定义是这样的：当我们说vclock A是vclock B的祖先时，当且仅当A中的每一个标记ID都存在于B中，同时A中对应的标记版本号要小于等于B。对于标记ID不存在的情况，可以认为标记版本号为0。
+
+Dave通过对比vclock的方式发现了版本冲突，于是尝试解决冲突。两个版本中只能选择一个，于是他选择了时间为周四的，那么这条消息可以表示为：
+
+```
+date = Thursday
+vclock = Alice:1, Cathy:1, Ben:1, Dave:2
+```
+
+Dave在vclock中加上了两个消息中的全部标记ID（Alice，Ben，Catby，Dave），同时将自己对应的版本号加1。然后将这条消息发送给Ben。
+
+最后当Alice从Catby和Ben收集反馈消息的时候（此时Dave联系不上），收到如下消息：
+
+来自Catby的：
+```
+date = Thursday
+vclock = Alice:1, Cathy:1, Dave:1
+```
+来自Ben的：
+```
+date = Thursday
+vclock = Alice:1, Cathy:1, Ben:1, Dave:2
+```
+
+ 这时Dave的信息版本已经变为了2，即使Dave没有反馈，Alice也会知道Ben反馈的是最新信息，而Cathy的是以前的信息。
+ ​
+ ####  Version vectors
+ 
+ Version vectors是Vector clock的一个变种，实现上与Vector clock类似，目的用于发现数据冲突。
+ 
+ 分布式系统中数据一般存在多个副本，多个副本可能被同时更新，这会引起副本间数据不一致。每一个副本节点对于一个文件保存一个版本向量 version vectors，Version vectors用来记录不同节点对于该文件的修改。向量含有N个元素，N为拥有该文件的节点数。向量中每一个元素，比如(Si : vi )表示，节点Si上对文件f进行了共vi次修改。通过比较不同节点保存的version vectors向量可以发现节点间的更新冲突。
+ 
+ Vector clock只用于发现数据冲突，不能解决数据冲突。如何解决数据冲突因场景而异，具体方法有以最后更新为准，或将冲突的数据交给client由client端决定如何处理，或通过选举决议事先避免数据冲突的情况发生。 因Vector Clock算法需维护一个副本节点数长度的版本向量，造成对节点的动态加入不灵活，以及当副本节点不断增长时，进行副本管理的数据量也会不断增长。
+
+ > amazon的分布式存储引擎Dynamo早期就是通过Version vectors来构建同一对象多个事件的部分有序的时序集合。现在的amazon dynamo早已摒弃了version vectors，而采用了synchronous replication（类似paxos的protocol））。
+
+  #### True Time
+
+NTP是有误差的，而且NTP还可能出现时间回退的情况，所以我们不能直接依赖NTP来确定一个事件发生的时间。在Google Spanner里面，通过引入True Time来解决了分布式时间问题。
+
+Google Spanner的关键技术是TrueTime API（具有原子时钟和GPS）。TrueTime API直观的揭示了时钟的不可靠性，它运行提供的边界更决定了时间标记。
+
+Spanner通过使用GPS + Atomic Clock来对集群的机器进行校时，精度误差范围能控制在ms级别，通过提供一套TrueTime API给外面使用。
+
+虽然spanner引入了TrueTime可以得到全球范围的时序一致性，但相关事务在提交的时候会有一个wait时间ε（ε表示一个无限接近于0的一个无限小的正数），只是这个时间很短，而且spanner后续都准备将其优化到 ε < 1ms，也就是对于关联事务，仅仅在上一个事务commit之后等待2ms之后就能执行。
+
+spanner有一个最大的问题，TrueTime是基于硬件的，而现在对于很多企业来说，是没有办法实现这套部署的。
+
+#### Hybrid Logic Clock
+
+CockroachDB使用了一个叫[HLC](http://www.cse.buffalo.edu/tech-reports/2014-04.pdf)（hybird logic clocks）算法来解决分布式时间的问题，在保持逻辑时钟的特点的同时又逼近真实事件。
+
+HLC是基于NTP的，但它只会读取当前系统时间，而不会去修改，同时HLC又能保证在NTP出现同步问题的时候仍能够很好的进行容错处理。对于一个HLC的时间t来时，它总是大于等于当前的系统时间，并且与其在一个很小的误差范围里面，也就是 |l - pt| < ε。
+
+HLC由两部分组成，physical clock + logic clock，l.j维护的是节点j当前已知的最大的物理时间，c.j则是当前的逻辑时间。那么判断两个事件的先后顺序就很容易了，先判断物理时间pt，在判断逻辑时间ct。
+
+HLC虽然方便，它毕竟是基于NTP的，所以如果NTP出现了问题，可能导致HLC与当前系统pt的时间误差过大，其实已经不怎么精确了，HLC论文提到对于一些out of bounds的message可以直接忽略，然后加个log让人工后续处理，而cockroachdb是直接打印了一个warning log。
+
+#### TSO
+
+无论上面的Ture Time还是Hybrid Logic Time，都是为了在分布式情况下获取全局唯一时间，如果整个系统不复杂，而且没有spanner那种跨全球的需求，有时候一台中心授时服务就可以了。
+
+在Google Percolator系统中，就提到使用了一个timestamp oracle（TSO）的服务来提供统一的授时服务。
+
+Percolator 是 Google 的上一代分布式事务解决方案，构建在 BigTable 之上，在 Google 内部用于网页索引更新的业务。原理比较简单，总体来说就是一个经过优化的 2PC 的实现，依赖一个单点的授时服务 TSO 来实现单调递增的事务编号生成，提供 SI 的隔离级别。
+
+传统的分布式事务模型中，一般都会有一个中央节点作为事务管理器，Percolator 的模型通过对于锁的优化，去掉了单点的事务管理器的概念，将整个事务模型中的单点局限于授时服务器上，在生产环境中，单点授时是可以接受的，因为 TSO 的逻辑极其简单，只需要保证对于每一个请求返回单调递增的 id 即可，通过一些简单的优化手段（比如 pipeline）性能可以达到每秒生成百万 id 以上，同时 TSO 本身的高可用方案也非常好做，所以整个 Percolator 模型的分布式程度很高。
+
+### 分布式一致性协议与算法
 
 一致性协议与算法目前有多种，包括Paxos、Raft、Zab、VR等，都是当前分布式系统实现时的可选方案。这些协议或算法包含了很多共同的内容或基本概念，如选举、多数派、状态机等，Paxos、Raft、Zab和VR都是解决一致性问题的协议，Paxos协议原文倾向于理论，最初的描述是针对非常理论的一致性问题，真正能应用于工程实现的mulit-paxos，Lamport也是很粗略的描述，以后有人尝试对multi-paxos做出更为完整详细的描述，但是每个人描述的都不大一样。Raft、Zab、VR倾向于实践，一致性保证程度等的不同也导致这些协议间存在差异。相比Raft、Zab、VR，Paxos更纯粹、更接近一致性问题本源，尽管Paxos倾向理论，但不代表Paxos不能应用于工程。基于Paxos的工程实践，须考虑具体需求场景(如一致性要达到什么程度)，再在Paxos原始语意上进行包装。也可以将其他的一致性协议或者算法看做是Paxos的一个变种。Raft、Zab、VR，multi-paxos，这些都可以被称之为基于leader的一致性协议。不同的是，multi-paxos是作为对经典paxos的优化而提出，通过选择一个proposer作为leader降低多个proposer引起冲突的频率，合并阶段将一次决议的平均消息代价缩小到最优的两次，实际上就算有多个leader存在，算法还是安全的，只是退化为了经典的paxos算法。而经典的paxos，从一个proposal被提出到被接受分为两个阶段，第一个阶段去询问值，第二阶段根据询问的结果提出值。这两个阶段是无法分割的，相互关联，共同保障了协议的一致性。而VR,ZAB,Raft这些强调合法leader的唯一性协议，它们是从leader的角度描述协议的流程，也从leader的角度出发论证正确性。但是实际上它们使用了和Paxos完全一样的原理来保证协议的安全性，当同时存在多个节点同时尝试成为leader或者不止一个节点认为自己时leader时，本质上它们和经典Paxos中多个proposer并存的情形没什么不同。实现分布式系统时，先从具体需求和场景考虑，Raft、Zab、VR、Paxos等协议没有绝对地好与不好，只是适不适合。
 
 Google的Chubby、Megastore（发表的论文里有关于mulit-paxos的公开细节）使用了Paxos，zookeeper使用了Zab，Raft是工程上应用最多的算法，很多知名组件都使用了raft协议，在github上有各种语言实现raft的算法包，请参考：https://raft.github.io/
 
-### Paxos 一致性算法
+####  选举、多数派、租约
+
+选举、多数派、租约都是分布式系统中最常见的问题，也是分布式系统实现的基础，很多分布式系统组件中都存在这三个概念，例如zookeeper的实现，甚至现代分布式协议或算法都需要或依赖于选举、多数派及租约。
+
+选举（election）通过打破节点间的对等关系，选得的leader(或叫master、coordinator)也即2PC/3PC中的协调者，有助于实现事务原子性、提升决议效率。
+
+多数派(quorum)帮助我们在网络分化的情况下达成决议一致性，在leader选举的场景下帮助我们选出唯一leader。
+
+租约(lease)在一定期限内给予节点特定权利，也可以用于实现leader选举。
+
+#####  选举
+
+在分布式系统出现故障后，通常需要重新组织活动的节点使它们继续执行有用的任务。在这个重新组织和配置的过程中，第一步就是要选出一个协调者来管理这些操作。故障的检测通常是基于超时机制的。如果一个进程超过一定的时间没有收到协调者的响应，它就怀疑协调者出了故障并启动选举过程。选举在集群服务器、负载均衡、重复数据更新、应急恢复、连接组和互斥等领域都有广泛应用。一般来说，选举过程包括两步：一、选择一个具有最高优先级的leader，二、通知其他进程谁是leader。
+
+选举算法的分类：
+
+1. 基于环形拓扑的（环算法），其中每个进程不知道其它进程的优先级。
+2. 基于全连接拓扑的，其中每个进程知道其它进程的优先级。
+3. 基于非比较的，其中消息被“编码”在以轮表示的时间中，这种类型的算法只能工作在同步系统中。 
+
+其中最常用的算法是1982年由Hector Garcia-Molina提出的[Bully算法](http://homepage.divms.uiowa.edu/~ghosh/Bully.pdf)，其要求每个节点对应一个序号，序号最高的节点为leader。leader宕机后次高序号的节点被重选为leader。
+
+当任何一个节点发现协调者不响应请求时，他发起一次选举，选举过程如下：
+
+1. 发现协调者不响应的节点向所有编号比他大的节点发送一个选举消息
+2. 如果无人响应，则该节点获胜，成为协调者
+3. 如果编号比他大的节点响应，则由响应者接管选举工作，该节点的工作完成。在由响应者循环1-3步直到最大编号节点胜出。
+
+任何一个时刻，一个节点只能从编号比他小的节点接受选举消息，当消息到达时，接受者发送一个OK消息给发送者，表明它在运行，接管工作。最终除了编号最大的一个节点外，其他节点都放弃，那个节点就是新的协调者。他将获胜消息发送给其他所有节点，通知他们自己为新的协调者。当一个以前宕机的节点恢复过来了后，它将主持一场选举。如果该节点恰好是当前运行节点中编号最大的进程，它将获胜。因此，此算法称为Bully算法。
+
+#####  多数派
+
+  当分布式环境下出现网络分化时，由于出现了网络隔离，隔离之后会有多个节点都认为自己具有最大编号，将会产生多个协调者，所以引入了[多数派](https://ecommons.cornell.edu/bitstream/handle/1813/6323/82-483.pdf?sequence=1)这个概念。多数派确保了在网络隔离情况下的leader的唯一性。假如节点总数为2X+1，则一项选举得到多于 X 节点赞成才能获得通过。leader选举中，网络分化场景下只有具备多数派节点的部分才可能选出leader，这避免了多leader的产生。因此，一般要保证分布式一致性，参与选举的节点数在集群中都要指定为单数个。
+
+#####  租约
+
+在一个分布式系统中何时发起重新选举呢？最先可能想到会通过心跳(heart beat)判别leader状态是否正常，但在网络拥堵或瞬断的情况下，leader状态可能不正常，但堵塞或瞬断结束后又正常，而这时，已经完成了选举，这容易导致出现双leader的情况。因此，引入了租约的概念。
+
+租约的中心思想是每个租约时长内只有一个节点获得租约、到期后必须重新颁发租约。假设我们有一个租约颁发节点，节点在租约颁发节点上注册自己，租约颁发节点按选举颁发租约给节点，使节点成为leader，在租约期内，即使leader节点宕机，也不进行重新选举，到期后重新选举，颁发租约并确定leader。
+
+在实际应用中，zookeeper、ectd均存在租约颁发。
+
+#### Paxos 一致性算法
 
 Paxos 算法解决的问题是一个分布式系统如何就某个值（决议）达成一致。一个典型的场景是，在一个分布式数据库系统中，如果各节点的初始状态一致，每个节点执行相同的操作序列，那么他们最后能得到一个一致的状态。为保证每个节点执行相同的命令序列，需要在每一条指令上执行一个“一致性算法”以保证每个节点看到的指令一致。一个通用的一致性算法可以应用在许多场景中，是分布式计算中的重要问题。因此从20世纪80年代起对于一致性算法的研究就没有停止过。节点通信存在两种模型：共享内存（Shared memory）和消息传递（Messages passing）。Paxos 算法就是一种基于消息传递模型的一致性算法。
 
@@ -855,9 +1010,6 @@ Proposer的个数是1~n 都可以的；如果是1个proposer，没有竞争压�
 如果在第6步的时候，client2只找其中一位官员签约，那就无法形成多数派，这时，client1已经进入第一阶段更新了2位Acceptor的贿赂，client2在第二阶段会碰壁的，碰壁之后他重新回到第一阶段，在用30万给Acceptor们。这个整体过程一直重复一直到第二阶段有多数派形成，谁先形成算谁的。
 
 Paxos过程结束了，这样，一致性得到了保证，算法运行到最后所有的proposer都投“client2中标”，所有的acceptor都接受这个议题。也就是说在最初的第二阶段，议题是先入为主的，谁先占了先机，后面的proposer在第一阶段就会学习到这个议题而修改自己本身的议题，因为这样没职业操守，才能让一致性得到保证，该算法就是为了追求结果的一致性。
-
-
-
 
 [如何浅显易懂地解说 Paxos 的算法](https://www.zhihu.com/question/19787937)
 
@@ -1001,158 +1153,6 @@ watch机制更稳定，基本上可以通过watch机制实现数据的完全同�
 一致性哈希基本解决了在P2P环境中最为关键的问题——如何在动态的网络拓扑中分布存储和路由。每个节点仅需维护少量相邻节点的信息，并且在节点加入/退出系统时，仅有相关的少量节点参与到拓扑的维护中。所有这一切使得一致性哈希成为第一个实用的DHT算法。
 
 
-
-## 开源SQL引擎介绍
-
-[6大主流开源SQL引擎总结](http://www.toutiao.com/a6392538584179720449/?tt_from=email&utm_campaign=client_share&app=news_article_social&utm_source=email&iid=9347877982&utm_medium=toutiao_ios)
-
-Hive、Impala、Spark SQL、Drill、HAWQ 、Presto、Druid、Calcite、Kylin、Phoenix、Tajo 和Trafodion。2个商业化选择Oracle Big Data SQL 和IBM Big SQL（BigSQL 3.0 包含在 [BigInsights 3.0](https://www.ibm.com/analytics/us/en/technology/hadoop/) ），IBM 尚未将后者更名为“Watson SQL”。
-
-不像关系型数据库，SQL 引擎独立于数据存储系统（相对而言，关系型数据库将查询引擎和存储绑定到一个单独的紧耦合系统中），提供了更大的灵活性，尽管存在潜在的性能损失。
-
-下面的图中展示了主要的SQL 引擎的流行程度，数据由奥地利咨询公司Solid IT 维护的DB-Engines 提供。DB-Engines 每月为超过200个数据库系统计算流行得分。得分反应了搜索引擎的查询，在线讨论的提及，提供的工作，专业资历的提及，以及tweets。
-
-https://db-engines.com/en/ranking
-
-虽然Impala、Spark SQL、Drill、Hawq 和Presto 一直在运行性能、并发量和吞吐量上击败Hive，但是Hive 仍然是最流行的（至少根据DB-Engines 的标准）。原因有3个：
-
-* Hive 是Hadoop 的默认SQL 选项，每个版本都支持。而其他的要求特定的供应商和合适的用户；
-* Hive 已经在减少和其他引擎的性能差距。大多数Hive 的替代者在2012年推出，当Impala、Spark、Drill 等大步发展的时候，Hive只是慢慢改进。现在，虽然Hive 不是最快的选择，但是它比五年前要好得多；
-* 虽然速度很重要，但是海量数据下查询的稳定性更重要。
-
-对于开源项目来说，最佳的健康度量是它的活跃开发者社区的大小。如下图所示，Hive 和Presto 有最大的贡献者基础。（Spark SQL 的数据暂缺）
-数据来源：[Open Hub](https://www.openhub.net/)
-
-### Apache Hive
-
-Apache Hive 是Hadoop 生态系统中的第一个SQL 框架。Facebook 的工程师在2007年介绍了Hive，并在2008年将代码捐献给Apache 软件基金会。2010年9月，Hive 毕业成为Apache 顶级项目。Hadoop 生态系统中的每个主要参与者都发布和支持Hive，包括Cloudera、MapR、Hortonworks 和IBM。Amazon Web Services 在Elastic MapReduce（EMR）中提供了Hive 的修改版作为云服务。
-
-早期发布的Hive 使用MapReduce 运行查询。复杂查询需要多次传递数据，这会降低性能。所以Hive 不适合交互式分析。由Hortonworks 领导的Stinger 明显的提高了Hive 的性能，尤其是通过使用Apache Tez，一个精简MapReduce 代码的应用框架。Tez 和ORCfile，一种新的存储格式，对Hive 的查询产生了明显的提速。
-
-Cloudera 实验室带领一个并行项目重新设计Hive 的后端，使其运行在Apache Spark 上。经过长期测试后，Cloudera 在2016年初发布了Hive-on-Spark 的正式版本。
-
-在2016年，Hive 有100多人的贡献者。该团队在2月份发布了Hive 2.0，并在6月份发布了Hive 2.1。Hive 2.0 的改进包括了对Hive-on-Spark 的多个改进，以及性能、可用性、可支持性和稳定性增强。Hive 2.1 包括了Hive LLAP（”Live Long and Process“），它结合持久化的查询服务器和优化后的内存缓存，来实现高性能。该团队声称提高了25倍。
-
-9月，Hivemall 项目进入了Apache 孵化器，Hivemall 最初由Treasure Data 开发并捐献给Apache 软件基金会，它是一个可扩展的机器学习库，通过一系列的Hive UDF 来实现，设计用于在Hive、Pig 和Spark SQL 上运行MapReduce。该团队计划在2017年第一季度发布了第一个版本。
-
-### Apache Impala
-
-2012年，Cloudera 推出了Impala，一个开源的MPP SQL 引擎，作为Hive 的高性能替代品。Impala 使用HDFS 和HBase，并利用了Hive 元数据。但是，它绕开了使用MapReduce 运行查询。
-
-Cloudera 的首席战略官Mike Olson 在2013年底说到Hive 的架构是有根本缺陷的。在他看来，开发者只能用一种全新的方式来实现高性能SQL，例如Impala。2014年的1月、5月和9月，Cloudera 发布了一系列的基准测试。在这些测试中，Impala 展示了其在查询运行的逐步改进，并且显著优于基于Tez 的Hive、Spark SQL 和Presto。除了运行快速，Impala 在并发行、吞吐量和可扩展性上也表现优秀。2015年，Cloudera 将Impala 捐献给Apache 软件基金会，进入了Apache 孵化计划。Cloudera、MapR、Oracle 和Amazon Web Services 分发Impala，Cloudera、MapR 和Oracle 提供了商业构建和安装支持。
-
-2016年，Impala 在Apache 孵化器中取得了稳步发展。该团队清理了代码，将其迁移到Apache 基础架构，并在10月份发布了第一个Apache 版本2.7.0。新版本包括了性能提升和可扩展性改进，以及一些其他小的增强。
-
-### Spark SQL
-
-Spark SQL 是Spark 用于结构化数据处理的组件。Apache Spark 团队 在2014年发布了Spark SQL，并吸收了一个叫Shark 的早期的Hive-on-Spark 项目。它迅速成为最广泛使用的Spark 模块。
-
-Spark SQL 用户可以运行SQL 查询，从Hive 中读取数据，或者使用它来创建Spark Dataset和DataFrame（Dataset 是分布式的数据集合，DataFrame 是统一命名的Dataset 列）。Spark SQL 的接口向Spark 提供了数据结构和执行操作的信息，Spark 的Catalyst 优化器使用这些信息来构造一个高效的查询。
-
-2015年，Spark 的机器学习开发人员引入了ML API，一个利用Spark DataFrame 代替低级别Spark RDD API 的包。这种方法被证明是有吸引力和富有成果的；2016年，随着2.0 的发布，Spark 团队将基于RDD 的API改为维护模式。DataFrame API现在是Spark 机器学习的主要接口。
-
-此外，在2016年，该团队还在Spark 2.1.0的Alpha 版本中发布了结构化的流式处理。结构化的流式处理是构建在Spark SQL 上的一个流处理引擎。用户可以像对待静态源一样，用同样的方式查询流式数据源，并且可以在单个查询中组合流式和静态源。Spark SQL 持续运行查询，并且在流式数据到达的时候更新结果。结构化的流通过检查点和预写日志来提供一次性的容错保障。
-
-### Apache Drill
-
-2012年，由Hadoop 分销商的领导者之一MapR 领导的一个团队，提出构建一个Google Dremel 的开源版本，一个交互式的分布式热点分析系统。他们将其命名为Apache Drill。Drill 在Apache 孵化器中被冷落了两年多，最终在2014年底毕业。该团队在2015年发布了1.0。
-
-MapR 分发和支持Apache Drill。2016年，超过50个人对Drill 做出了贡献。该团队在2016年发布了5个小版本，关键的增强功能包括：
-
-Web 认证
-支持Apache Kudu 列数据库
-支持HBase 1.x
-动态UDF 支持
-2015年，两位关键的Drill 贡献者离开了MapR，并启动了Dremio，该项目尚未发布。
-
-### Apache HAWQ
-
-Pivotal 软件在2012年推出了一款商业许可的高性能SQL 引擎[HAWQ](http://hawq.incubator.apache.org)，并在尝试市场营销时取得了小小的成功。改变战略后，Pivotal 在2015年6月将项目捐献给了Apache，并于2015年9月进入了Apache 孵化器程序。
-
-15个月之后，HAWQ 仍然待在孵化器中。2016年12月，该团队发布了HAWQ 2.0.0.0，加入了一些错误修复。他可能会在2017年毕业成为正式项目。
-
-HAWQ 的一个特点是它支持Apache MADlib，一个同样在孵化器中的SQL 机器学习项目。HAWQ 和MADlib 的组合，应该是对购买了Greenplum 的人是一个很好的安慰。
-
-HAWQ部署：
-
-![hawq_high_level_architecture](media/32-DistributedSQLTransation/hawq_high_level_architecture.png)
-
-HAWQ组件：
-
-![hawq_architecture_components](media/32-DistributedSQLTransation/hawq_architecture_components.png)
-
-
-### Presto
-
-Facebook 工程师在2012年发起了Presto 项目，作为Hive 的一个快速交互的取代。在2013年推出时，成功的支持了超过1000个Facebook 用户和每天超过30000个PB级数据的查询。2013年Facebook 开源了Presto。
-
-Presto 支持多种数据源的ANSI SQL 查询，包括Hive、Cassandra、关系型数据库和专有文件系统（例如Amazon Web Service 的S3）。Presto 的查询可以联合多个数据源。用户可以通过C、Java、Node.js、PHP、Python、R和Ruby 来提交查询。
-
-Airpal 是Airbnb 开发的一个基于web 的查询工具，让用户可以通过浏览器来提交查询到Presto。Qubole 位Presto 提供了管理服务。AWS 在EMR 上提供Presto 服务。
-
-2015年6月，Teradata 宣布计划开发和支持该项目。根据宣布的三阶段计划，Teredata 提出将Presto 集成导Hadoop 生态系统中，能够在YARN 中进行操作，并且通过ODBC 和JDBC 增强连接性。Teredata 提供了自己的Presto 发行版，附带一份数据表。2016年6月，Teradata 宣布了Information Builders、Looker、Qlik、Tableau 和ZoomData 的鉴定结果，以及正在进行中的MicroStrategy 和Microsoft Power BI。
-
-Presto 是一个非常活跃的项目，有一个巨大的和充满活力的贡献者社区。该团队发布的速度非常快--2016年共发布了42个版本。
-
-### Apache Calcite
-
-Apache Calcite 是一个开源的数据库构建框架。它包括：
-
-* SQL 解析器、验证器和JDBC 驱动
-* 查询优化工具，包括关系代数API，基于规则的计划器和基于成本的查询优化器
-* Apache Hive 使用Calcite 进行基于成本的查询优化，而Apache Drill 和Apache Kylin 使用SQL 解析器。
-
-Calcite 团队在2016年推出了5个版本包括bug 修复和用于Cassandra、Druid 和Elasticsearch 的新适配器。
-
-### Apache Kylin
-
-[Apache Kylin](http://kylin.apache.org/cn/) 是一个具有SQL 接口的OLAP 引擎。由eBay 开发并捐献给Apache，Kylin于2014年10月在github开源，并在2014年11月加入Apache孵化器，Kylin 在2015年毕业成为顶级项目。
-
-2016年3月，Apache Kylin核心开发成员创建成立的创业公司Kyligence 提供商业支持的数据仓库产品KAP （Kyligence Analytics Platform）。
-
-![kylin_diagram](media/32-DistributedSQLTransation/kylin_diagram.png)
-
-### Apache Phoenix
-
-Apache Phoenix 是一个运行在HBase 上的SQL 框架，绕过了MapReduce。Salesforce 开发了该软件并在2013年捐献给了Apache。2014年5月项目毕业成为顶级项目。Hortonworks 的Hortonworks 数据平台中包含该项目。自从领先的SQL 引擎都适配HBase 之后，Phoenix的重要性大大下降。
-
-### Apache Tajo
-
-Apache Tajo 是Gruter 在2011年推出的一个快速SQL 数据仓库框架，一个大数据基础设施公司，并在2013年捐献给Apache。2014年Tajo 毕业成为顶级项目。在作为Gruter 主要市场的韩国之外，该项目很少吸引到预期用户和贡献者的兴趣。
-
-### Apache Trafodion
-
-[Apache Trafodion](http://trafodion.incubator.apache.org/) 是另一个SQL-on-HBase 项目，由HP 实验室构思，它告诉你几乎所有你需要知道的。2014年6月HP 发布Trafodion，一个月之后，Apache Phoenix 毕业。6个月之后，HP 的高管们认为相对于另一款SQL-on-HBase 引擎，它的商业潜力有限，所以他们将项目捐献给了Apache，项目于2015年5月进入孵化器。
-
-如果孵化结束，Trafodion 承诺成为一个事务数据库。
-
-![Trafodion process architecture](media/32-DistributedSQLTransation/Trafodion_process_architecture.png)
-
-### OceanBase
-OceanBase是阿里巴巴自主研发的一个支持海量数据的高性能分布式数据库系统。
-
-OceanBase使用了分布式技术和无共享架构，来自业务的访问会自动分散到多台数据库主机上。
-
-OceanBase引入了Paxos协议，每一笔事务，主库执行完成后，要同步到半数以上库(包括主库自身)，例如3个库中的2个库，或者5个库中的3个库，事务才成功。这样，少数库(例如3个库中的1个库，或者5个库中的2个库)异常后业务并不受影响。分布式事务一致性协议paxos主要用于保证一个数据在分布式系统里是可靠的。
-
-
-OceanBase是“基线数据（硬盘）”+“修改增量（内存）”的架构。
-
-即整个数据库以硬盘（通常是SSD）为载体，新近的增、删、改数据（“修改增量”）在内存，而基线数据在保存在硬盘上，因此OceanBase可以看成一个准内存数据库。这样的好处是：
-* 写事务在内存（除事务日志必须落盘外），性能大大提升
-* 没有随机写硬盘，硬盘随机读不受干扰，高峰期系统性能提升明显；对于传统数据库，业务高峰期通常也是大量随机写盘（刷脏页）的高峰期，大量随机写盘消耗了大量的IO，特别是考虑到SSD的写入放大，对于读写性能都有较大的影响
-* 基线数据只读，缓存（cache）简单且效果提升
-* 线上OceanBase的内存配置是支撑平常两天的修改增量（从OceanBase 1.0开始，每台OceanBase都可以写入，都承载着部分的修改增量），因此即使突发大流量为平日的10-20倍，也可支撑1~2个小时以上。
-
-修改增量在内存，大概需要多大的内存？即使按双11全天的支付笔数10.5亿笔，假设每笔1KB，总共需要的内存大约是1TB，平均到10台服务器，100GB/台。
-
-在类似双十一这种流量特别大的场景中，OceanBase内存能够支持峰值业务写入1~2个小时以上，之后OceanBase必须把内存中的增删改数据（“修改增量”）尽快整合到硬盘并释放内存，以便业务的持续写入。整合内存中的修改增量到硬盘，OceanBase称为每日合并，必然涉及到大量的硬盘读写（IO），因此可能对业务的吞吐量和事务响应时间（RT）产生影响。如何避免每日合并对业务的影响呢？OceanBase通过“轮转合并”解决了这个问题。
-
-出于高可用的考虑，OceanBase是三机群（zone）部署。
-
-根据配置和部署的不同，业务高峰时可以一个机群（zone）、两个机群（zone）或者三个机群（zone）提供读写服务。OceanBase的轮转合并就是对每个机群（zone）轮转地进行每日合并，在对一个机群（zone）进行每日合并之前，先把该机群（zone）上的业务读写流量切换到另外的一个或两个机群（zone），然后对该机群（zone）进行全速的每日合并。因此在每日合并期间，合并进行中的机群（zone）没有业务流量，仅仅接收事务日志并且参与Paxos投票，业务访问OceanBase的事务响应时间完全不受每日合并的影响，仅仅是OceanBase的总吞吐量有所下降：如果先前是三个机群（zone）都提供服务则总吞吐量下降1/3，如果先前只有一个或两个机群（zone）提供服务则总吞吐量没有变化。
-
-轮转合并使得OceanBase对SSD十分友好，避免了大量随机写盘对SSD寿命的影响，因此OceanBase可以使用相对廉价的“读密集型”SSD来代替传统数据库使用的相对昂贵的“读写型”SSD，而不影响性能。此外由于轮转合并对服务器的CPU使用、硬盘IO使用以及耗时长短都不敏感（高峰期的传统数据库在刷脏页的同时还要优先保证业务访问的吞吐量和事务响应时间，刷脏页的CPU及IO资源都非常受限），因此OceanBase在每日合并时可以采用更加高效的压缩或者编码算法（比如压缩或编码速度略慢，但压缩率较高、解压缩很快的算法），从而进一步降低存储成本并提升性能。
 
 ## 分布式数据库 Schema 设计
 
