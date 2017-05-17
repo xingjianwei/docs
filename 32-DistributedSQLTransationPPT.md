@@ -75,11 +75,18 @@ NewSQL的必备特点 TiDB
 ### TSO
 ---
 ## 一致性模型
-分布式一致性协议与算法 Paxos 一致性算法
+---
+## 分布式一致性协议与算法 Paxos 一致性算法
+---
 ## 分布式协调和配置服务
+---
 ## Etcd 架构与实现 
+[Raft演示](file:///Users/xingjianwei/github/thesecretlivesofdata/raft/index.html)
+---
 ## 分区(Partitioning) 
+---
 ## 分片(Replication) 
+---
 ## 一致性哈希(Consistent Hashing)
 ---
 ## 开源SQL引擎介绍
