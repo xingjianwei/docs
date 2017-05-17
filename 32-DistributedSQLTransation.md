@@ -586,8 +586,11 @@ XA 是指由 X/Open 组织提出的分布式交易处理的规范。XA规范主�
 协调者接收到所有参与者反馈的 Ack 消息后，完成事务。
 
 如果在阶段二，参与者反馈 Ack 出问题或者超时，那么执行事务回滚请求：
-
 同2PC的事务回滚请求
+
+* 优点：3PC主要解决的单点故障问题，并减少阻塞范围，因为一旦参与者无法及时收到来自协调者的信息之后，他会默认执行commit。而不会一直持有事务资源并处于阻塞状态。
+
+* 缺点：引入新问题，如果出现网络分区，协调者发送的abort响应没有及时被参与者接收到，那么参与者在等待超时之后执行了commit操作。这样就和其他接到abort命令并执行回滚的参与者之间存在数据不一致的情况。
 
 参考[维基百科中文](https://zh.wikipedia.org/wiki/%E4%B8%89%E9%98%B6%E6%AE%B5%E6%8F%90%E4%BA%A4)，[维基百科英文](https://en.wikipedia.org/wiki/Three-phase_commit_protocol)
 
@@ -1030,7 +1033,7 @@ Proposer的个数是1~n 都可以的；如果是1个proposer，没有竞争压�
 
 以下面的场景为例：
 
-假设有2个Client(老板，老板之间是竞争关系)和3个Acceptor(政府官员)：
+假设有2个Client(老板，老板之间是竞争关系)、2个Proposer（秘书，秘书之间是不是竞争关系）和3个Acceptor(政府官员，政府官员之间是共识关系)：
 
 在第一阶段（prepare阶段）：
 
@@ -1085,6 +1088,44 @@ etcd和zk二者的定位都是通用的一致性kv存储，而eureka和consul的
 zookeeper常常用来做分布式事务锁。Zookeeper所使用的zab协议也是类似paxos协议的。所有分布式自协商一致性算法都是paxos算法的简化或者变种。
 
 Client是使用zookeeper服务的机器，Zookeeper自身包含了Acceptor, Proposer, Learner。Zookeeper领导选举就是paxos过程，还有Client对Zookeeper写Znode时，也是要进行Paxos过程的，因为不同Client可能连接不同的Zookeeper服务器来写Znode，到底哪个Client才能写成功？需要依靠Zookeeper的paxos保证一致性，写成功Znode的Client自然就是被最终接受了，Znode包含了写入Client的IP与端口，其他的Client也可以读取到这个Znode来进行Learner。也就是说在Zookeeper自身包含了Learner(因为Zookeeper为了保证自身的一致性而会进行领导选举，所以需要有Learner的内部机制，多个Zookeeper服务器之间需要知道现在谁是领导)，Client端也可以Learner，Learner是广义的。
+
+ZooKeeper可以保证如下分布式一致性特性。
+1. 顺序一致性：
+从同一个客户端发起的事务请求，最终将严格按照其发起顺序被应用到ZooKeeper中。
+2. 原子性：
+更新操作要么成功要么失败，没有中间状态。
+3. 单一视图（Single system image）：
+    不管客户端连接哪一个服务器，客户端看到服务端的数据模型都是一致的（the same view of service）。
+4. 可靠性（Reliability）：
+   一旦一个更新成功，那么那就会被持久化，直到客户端用新的更新覆盖这个更新。
+5. 实时性（Timeliness）：
+Zookeeper仅保证在一定时间内，客户端最终一定能够从服务端读到最新的数据状态。
+
+[ZAB协议](http://blog.csdn.net/bohu83/article/details/51356773)
+
+ZooKeeper为高可用的一致性协调框架，并没有完全采用paxos算法，而是使用了ZAB（ZooKeeper Atomic Broadcast ）原子消息广播协议作为数据一致性的核心算法，ZAB协议是专为zookeeper设计的支持崩溃恢复原子消息广播算法。
+
+基于ZAB协议，zookeeper实现了一种基于主备模式的系统架构来保证集群中各副本之间的数据一致性。具体的：ZooKeeper使用单一主进程Leader用于处理客户端所有事务请求，采用ZAB协议将服务器数状态以事务形式广播到所有Follower上，因此能很好的处理客户端的大量并发请求（这里我理解就是ZK通过使用TCP协议及一个事务ID来实现事务的全序特性，leader模式就是先到先执行解决因果顺序）；另一方面,由于事务间可能存在着依赖关系，ZAB协议保证Leader广播的变更序列被顺序的处理，一个状态被处理那么它所依赖的状态也已经提前被处理；最后，考虑到住进程leader在任何时候可能崩溃或者异常退出，因此ZAB协议还要Leader进程崩溃的时候可以重新选出Leader并且保证数据的完整性；
+
+协议核心如下：
+
+所有的事务请求必须一个全局唯一的服务器（leader）来协调处理，集群其余的服务器称为follower服务器。leader服务器负责将一个客户端请求转化为事务提议（Proposal），并将该proposal分发给集群所有的follower服务器。之后leader服务器需要等待所有的follower服务器的反馈，一旦超过了半数的follower服务器进行了正确反馈后，那么leader服务器就会再次向所有的follower服务器分发commit消息，要求其将前一个proposal进行提交。
+
+ZAB协议中存在着三种状态，每个节点都属于以下三种中的一种：
+1. Looking：系统刚启动时或者Leader崩溃后正处于选举状态
+2. Following：Follower节点所处的状态，Follower与Leader处于数据同步阶段；
+3. Leading：Leader所处状态，当前集群中有一个Leader为主进程；
+
+ZAB是一种paxos算法的简化:
+
+ZAB协议可以细分为三个阶段：发现（discovery）、同步（sync）、广播(Broadcast)。
+
+ZooKeeper启动时所有节点初始状态为Looking，这时集群会尝试选举出一个Leader节点，选举出的Leader节点切换为Leading状态；当节点发现集群中已经选举出Leader则该节点会切换到Following状态，然后和Leader节点保持同步；当Follower节点与Leader失去联系时Follower节点则会切换到Looking状态，开始新一轮选举；在ZooKeeper的整个生命周期中每个节点都会在Looking、Following、Leading状态间不断转换；
+
+选举出Leader节点后ZAB进入原子广播阶段，这时Leader为和自己同步的每个节点Follower创建一个操作序列，一个时期一个Follower只能和一个Leader保持同步，Leader节点与Follower节点使用心跳检测来感知对方的存在；当Leader节点在超时时间内收到来自Follower的心跳检测那Follower节点会一直与该节点保持连接；若超时时间内Leader没有接收到来自过半Follower节点的心跳检测或TCP连接断开，那Leader会结束当前周期的领导，切换到Looking状态，所有Follower节点也会放弃该Leader节点切换到Looking状态，然后开始新一轮选举；
+
+
+
 
 #### Etcd 架构与实现
 
