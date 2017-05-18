@@ -3,6 +3,18 @@
 [TOC]
 
 ## 关系型数据库现状
+数据库作为业务的核心，在整个基础软件中是非常重要的一环。很长时间以来，关系型数据库一直是大公司的专利，市场被 Oracle / DB2 等企业数据库牢牢把持。但是随着互联网的崛起、开源社区的发展，上世纪九十年代 MySQL 1.0 的发布，标志着关系型数据库的领域社区终于有可选择的方案：
+
+### MySQL & MariaDB
+MySQL是一个真正的多用户、多线程SQL数据库服务器。SQL（结构化查询语言）是世界上最流行的和标准化的数据库语言，它使得存储、更新和存取信息更加容易。基本上 MySQL 的成长史就是互联网的成长史。其中，MySQL 5.5 是经典版本，基本所有的互联网公司都在使用。
+
+MariaDB是由MySQL创始人之一Monty分支的一个版本。在MySQL数据库被Oracle公司收购后，Monty担心MySQL数据库发展的未来，从而分支出一个版本。这个版本和其他分支有很大的不同，其默认使用崭新的Maria存储引擎，是原MyISAM存储引擎的升级版本。此外，其增加了对Hash Join的支持和对Semi Join的优化，使MariaDB在复杂的分析型SQL语句中较原版本的MySQL性能提高很多。另外，除了包含原有的一些存储引擎，如InnoDB、Memory，还整合了PBXT、FederatedX存储引擎。不得不承认，MariaDB数据库是目前MySQL分支版本中非常值得使用的一个版本，尤其是在OLAP的应用中，对Hash Join的支持和对Semi Join的优化可以大大提高MySQL数据库在这方面的查询性能。
+
+### PostgreSQL
+PostgreSQL 的历史也非常悠久，其前身是 UCB 的 Ingres，主持这个项目的 Michael Stronebraker 于 2015 年获得图灵奖。后来项目更名为 Post-Ingres，基于 BSD license 下开源。 1995 年几个 UCB 的学生为 Post-Ingres 开发了 SQL 的接口，正式发布了 PostgreSQL95，随后一步步在开源社区中成长起来。和 MySQL 一样，PostgreSQL 也是一个单机的关系型数据库，但是与 MySQL 方便用户过度扩展的 SQL 文法不一样的是，PostgreSQL 的 SQL 支持非常强大，不管是内置类型、JSON 支持、GIS 类型以及对于复杂查询的支持，PL/SQL 等都比 MySQL 强大得多，而且从代码质量上来看，PostgreSQL 的代码质量是优于 MySQL 的。相对于MySQL 5.7以前的版本，PostgreSQL 的 SQL 优化器比 MySQL 强大很多，几乎所有稍微复杂的查询PostgreSQL 的表现都优于 MySQL。
+
+从近几年的趋势上来看，PostgreSQL 的势头也很强劲，我认为 PostgreSQL 的不足之处在于没有 MySQL 那样强大的社区和群众基础。MySQL 经过那么多年的发展，积累了很多的运维工具和最佳实践，但是 PostgreSQL 作为后起之秀，拥有更优秀的设计和更丰富的功能。PostgreSQL 9 以后的版本也足够稳定，也有很多新的数据库项目是基于 PostgreSQL 源码的基础上进行二次开发，比如 Greenplum 等。
+
 随着时代的发展，各种终端的普及，应用和数据的规模越来越大，各种云服务的方案层出不穷。 在这个一切都可以水平扩展的时代，机器可扩展，服务可扩展，监控可扩展，缓存可扩展..... 然而，作为大多数应用最底层的数据存储 -- 关系型数据库， 难以找到一个优雅易用的水平扩展解决方案，一直以来不得不依赖主从复制，静态 Sharding 以及各种业务层的 Workarounds 勉强应对。
 
 ## NOSQL的兴起和优缺点

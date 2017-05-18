@@ -1,5 +1,8 @@
 
 ## 分布式SQL数据库
+
+2017年5月
+
 Note: https://github.com/hakimel/reveal.js
 ---
 ## 关系型数据库现状 
