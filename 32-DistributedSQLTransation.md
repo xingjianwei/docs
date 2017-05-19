@@ -179,6 +179,19 @@ OceanBase是“基线数据（硬盘）”+“修改增量（内存）”的架�
 
 轮转合并使得OceanBase对SSD十分友好，避免了大量随机写盘对SSD寿命的影响，因此OceanBase可以使用相对廉价的“读密集型”SSD来代替传统数据库使用的相对昂贵的“读写型”SSD，而不影响性能。此外由于轮转合并对服务器的CPU使用、硬盘IO使用以及耗时长短都不敏感（高峰期的传统数据库在刷脏页的同时还要优先保证业务访问的吞吐量和事务响应时间，刷脏页的CPU及IO资源都非常受限），因此OceanBase在每日合并时可以采用更加高效的压缩或者编码算法（比如压缩或编码速度略慢，但压缩率较高、解压缩很快的算法），从而进一步降低存储成本并提升性能。
 
+### Kudu
+
+[Kudu：一个融合低延迟写入和高性能分析的存储系统](http://www.jianshu.com/p/a6c0fdec3d7b)
+
+[基于 Tile 连接 Row-Store 和 Column-Store](https://my.oschina.net/zhaiyuan/blog/903948)
+
+[如何评价kudu存储引擎？](https://www.zhihu.com/question/37858641)
+
+[Apache Kudu 加速对频繁更新数据的分析](https://zhuanlan.zhihu.com/p/25928166)
+
+[ KUDU － Cloudera开发的又一个Hadoop系存储系统 ](http://blog.csdn.net/colorant/article/details/50803226)
+
+
 ### SequoiaDB
 
 SequoiaDB（巨杉数据库）是一款企业级分布式NewSQL数据库，自主研发并拥有完全自主知识产权，没有基于任何其他外部的开源数据库源代码。SequoiaDB支持标准SQL、事务操作、高并发、分布式、可扩展、与双引擎存储等特性，并已经作为商业化的数据库产品开源。
@@ -287,6 +300,7 @@ Web 认证
 支持Apache Kudu 列数据库
 支持HBase 1.x
 动态UDF 支持
+
 2015年，两位关键的Drill 贡献者离开了MapR，并启动了Dremio，该项目尚未发布。
 
 ### Apache HAWQ
