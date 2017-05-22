@@ -93,8 +93,6 @@ E. g:
 
 ## 新一代分布式SQL数据库（NewSQL）
 
-[参考文档](http://www.infoq.com/cn/articles/situation-of-the-open-source-database)
-
 ### NewSQL的必备特点
 * 无缝的水平扩展，应用层可以不用关心存储的容量和吞吐。
 * SQL 支持，SQL 有着良好的易用性和生态系统。业务层如果已经在使用 SQL ，转变到 NoSQL 上是个极其痛苦的过程。
@@ -103,7 +101,7 @@ E. g:
 * 在线的 Schema 变更，不需要每次更新Schema都要面临停止服务的窘境。
 * 零迁移成本，兼容现有的协议或者查询语法，已有的代码不需要做改动或很少改动自动就能获得扩展的能力。
 
-### [Spanner](http://www.csdn.net/article/2012-09-19/2810132-google-spanner-next-database-datacenter)
+### Spanner
 
 2012 年 Google 在 OSDI 上发表了 Spanner 的论文，2013 年在 SIGMOD 发表了 F1 的论文。这两篇论文让业界第一次看到了关系模型和 NoSQL 的扩展性在超庞大集群规模上融合的可能性。在此之前，大家普遍认为这个是不可能的，即使是 Google 也经历了 Megastore 这样的失败。
 
@@ -131,26 +129,22 @@ TiDB 本质上是一个更加正统的 Spanner 和 F1 实现，并不像 Cockroa
 
 TiKV 和 CockroachDB 一样也是选择了 Raft 作为整个数据库的基础；不一样的是，TiKV 整体采用 Rust 语言开发，作为一个没有 GC 和 Runtime 的语言，在性能上可以挖掘的潜力会更大。
 
-[Apache HAWQ与TiDB比较](https://www.zhihu.com/question/54597742)
-
 ### CockroachDB
 CockroachDB是一个基于事务和强一致性键值存储构建的分布式SQL数据库。 它支持水平缩放; 可以容忍磁盘、机器、机架，甚至数据中心故障，并能在极短时间内无需人工干预的恢复服务; 支持强一致的ACID事务; 并提供了类SQL API来构造、操作和查询数据。
 
-蟑螂是一个分布式的K/V数据仓库，支持ACID事务，多版本值存储是其首要特性。主要的设计目标是全球一致性和可靠性，从蟑螂的命名上是就能看出这点。蟑螂数据库能处理磁盘、物理机器、机架甚至数据中心失效情况下最小延迟的服务中断；整个失效过程无需人工干预。蟑螂的节点是均衡的，其设计目标是同质部署（只有一个二进制包）且最小配置。
+CRDB是一个分布式的K/V数据仓库，支持ACID事务，多版本值存储是其首要特性。主要的设计目标是全球一致性和可靠性，从蟑螂的命名上是就能看出这点。蟑螂数据库能处理磁盘、物理机器、机架甚至数据中心失效情况下最小延迟的服务中断；整个失效过程无需人工干预。CRDB的节点是均衡的，其设计目标是同质部署（只有一个二进制包）且最小配置。
 
-蟑螂数据库实现了单一的、巨大的有序映射，键和值都是字节串形式（不是unicode），支持线性扩展，理论上支持4EB的逻辑数据）。映射有一个或者多个Range组成，每一个Range对应一个把数据存储在RocksDB（LevelDB的一个变种，Facebook贡献）上的K/V数据库，并且复制到三个或者更多蟑螂服务器上，Range定义为有开始和结束键值的区间。Range可以合并及分裂来维持总大小在一个全局配置的最大最小范围之间。Range的大小默认是64M，目的是便于快速分裂和合并，在一个热点键值区间快速分配负载。Range的复制确定为分离的数据中心来达到可靠性（比如如下分组：{ US-East, US-West, Japan }, { Ireland, US-East, US-West}, { Ireland, US-East, US-West, Japan, Australia }）
+CRDB实现了单一的、巨大的有序映射，键和值都是字节串形式（不是unicode），支持线性扩展，理论上支持4EB的逻辑数据）。映射有一个或者多个Range组成，每一个Range对应一个把数据存储在RocksDB（LevelDB的一个变种，Facebook贡献）上的K/V数据库，并且复制到三个或者更多蟑螂服务器上，Range定义为有开始和结束键值的区间。Range可以合并及分裂来维持总大小在一个全局配置的最大最小范围之间。Range的大小默认是64M，目的是便于快速分裂和合并，在一个热点键值区间快速分配负载。Range的复制确定为分离的数据中心来达到可靠性（比如如下分组：{ US-East, US-West, Japan }, { Ireland, US-East, US-West}, { Ireland, US-East, US-West, Japan, Australia }）
 
- Range有一种变化，通过分布式一致性算法实例来调节确保一致性，蟑螂所选择使用Raft一致性算法。所有的一致性状态存在于RocksDB中。
+ Range有一种变化，通过分布式一致性算法实例来调节确保一致性，CRDB所选择使用Raft一致性算法。所有的一致性状态存在于RocksDB中。
 
   一个逻辑上的变化可能会影响多个K/V对，逻辑变化是ACID事务性的。如果一个逻辑的变化引起的所有的键值都落在同一个Range里，Raft保证事务的原子性和一致性；不然的话，一个无锁的分布式提交协议用来协同受影响的Range。
 
- 蟑螂提供快照隔离级别和可串行化快照隔离级别，允许外部一致性和无锁读写，这些都依赖于快照时间戳和当前时间。快照一致性提供无锁读写，但是依然允许写偏。SSI（可串行化快照隔离级别）消除写偏，但是引入了一个有争议系统的性能损失。SSI是默认的隔离级别；为了性能客户端必须自己处理交易的正确性。蟑螂实现了和Spannerde 目录相似，蟑螂允许任意数据zone的配置。允许选择复制因子、存储设备类型及数据中心位置等配置来优化性能或者可用性。不像Spaner，zone是一个整体，不允许对实体组水平的细粒度数据进行移动。
+CRDB提供快照隔离级别和可串行化快照隔离级别，允许外部一致性和无锁读写，这些都依赖于快照时间戳和当前时间。快照一致性提供无锁读写，但是依然允许写偏。SSI（可串行化快照隔离级别）消除写偏，但是引入了一个有争议系统的性能损失。SSI是默认的隔离级别；为了性能客户端必须自己处理交易的正确性。CRDB实现了和 Spanner 的目录相似，CRDB允许任意数据zone的配置。允许选择复制因子、存储设备类型及数据中心位置等配置来优化性能或者可用性。不像Spaner，zone是一个整体，不允许对实体组水平的细粒度数据进行移动。
 
- CockroachDB 的技术选型比较激进，比如依赖了 HLC 来做事务的时间戳。但是在 Spanner 的事务模型的 Commit Wait 阶段等待时间的选择，CockroachDB 并没有办法做到 10ms 内的延迟；CockroachDB 的 Commit Wait 需要用户自己指定，但是 NTP 的时钟误差无法确定在多少毫秒内（在处理跨洲际机房时钟同步的问题上，基本只有硬件时钟一种办法，HLC 是没办法解决的）。Cockroach 采用了 gossip 来同步节点信息，当集群变得比较大的时候，gossip 心跳会是一个非常大的开销。
+ CockroachDB 的技术选型比较激进，比如依赖了 HLC 来做事务的时间戳。但是在 Spanner 的事务模型的 Commit Wait 阶段等待时间的选择，CockroachDB 并没有办法做到 10ms 内的延迟；CockroachDB 的 Commit Wait 需要用户自己指定，但是 NTP 的时钟误差无法确定在多少毫秒内（在处理跨洲际机房时钟同步的问题上，基本只有硬件时钟一种办法，HLC 是没办法解决的）。Cockroach 采用了 gossip 算法来同步节点信息，当集群变得比较大的时候，gossip 心跳会是一个非常大的开销。
  
 CockroachDB 的这些技术选择带来的优势就是非常好的易用性，所有逻辑都在一个 binary 中，开箱即用，这个是非常大的优点。
-
- [cockroachdb设计翻译](https://lihuanghe.github.io/2016/05/06/cockroachdb-design.html)
 
 ### OceanBase
 OceanBase是阿里巴巴自主研发的一个支持海量数据的高性能分布式数据库系统。
@@ -181,16 +175,143 @@ OceanBase是“基线数据（硬盘）”+“修改增量（内存）”的架�
 
 ### Kudu
 
-[Kudu：一个融合低延迟写入和高性能分析的存储系统](http://www.jianshu.com/p/a6c0fdec3d7b)
+#### 简介
 
-[基于 Tile 连接 Row-Store 和 Column-Store](https://my.oschina.net/zhaiyuan/blog/903948)
+Kudu是Todd Lipcon@Cloudera带头开发的存储系统，其整体应用模式和Hbase比较接近，即支持行级别的随机读写，并支持批量顺序检索功能。
+ 
+那既然有了HBase，为什么还需要Kudu呢，简单的说，HBase在OLAP场合，SQL／MR类的批量检索场景中，性能不够好。通常这种海量数据OLAP场景，要不走预处理的路，比如像EBAY麒麟这样走Cube管理的，或者像谷歌Mesa这样按业务需求走预定义聚合操作；再有就是自己构建数据通道，串接实时和批量处理两种系统，发挥各自的特长。
 
-[如何评价kudu存储引擎？](https://www.zhihu.com/question/37858641)
+Kudu定位于应对快速变化数据的快速分析型数据仓库，希望靠系统自身能力，支撑起同时需要高吞吐率的顺序和随机读写的应用场景（可能的场景，比如时间序列数据分析，日志数据实时监控分析），提供一个介于HDFS和HBase的性能特点之间的一个系统，在随机读写和批量扫描之间找到一个平衡点，并保障稳定可预测的响应延迟。
 
-[Apache Kudu 加速对频繁更新数据的分析](https://zhuanlan.zhihu.com/p/25928166)
+Todd自己做为HBase的重要贡献者之一，没有选择改进HBase，是因为基于HBase的设计思想很难实现Kudu所定位的目标。
 
-[ KUDU － Cloudera开发的又一个Hadoop系存储系统 ](http://blog.csdn.net/colorant/article/details/50803226)
+![kudu-pos](media/32-DistributedSQLTransation/kudu-pos.png)
 
+上图是 Hadoop 生态体系中，存储引擎和应用场景的对应关系。
+
+横轴代表数据查询分析的频度（Pace of Analysis），依次为：
+
+归档
+* 基于静态数据的扫描/分析（一次写入多次读取）
+* 基于频繁更新数据的快速分析
+* 实时访问/更新（OLTP）
+* 纵轴代表的是数据的更新频度（Pace of Data），依次为
+
+只读
+* 追加（Append-Only）
+* 频繁更新
+* 实时更新
+
+HDFS 特别适合归档和基于静态数据的扫描/分析的场景（一次写入多次读取），也就是上图中左下角的黄色区域，而HBase擅长实时高并发的读写应用，也就是右上角的蓝色区域。但是对于需要在频繁更新的数据之上做快速分析，也就是上图中间的虚线区域，Hadoop社区却一直没有比较好的存储层产品来满足。Kudu正是出于填补这个空白而诞生的。
+
+#### 设计思想
+
+Kudu的设计借鉴了Parque和HBase一些理念 / 思想。
+
+数据模型定义上，Kudu管理的是类似关系型数据库的结构化的表，表结构由类Sql的Schema进行定义，相比于HBase这样的NoSql类型的数据库，Kudu的行数据是由固定个数有明确类型定义的列组成，并且需要定义一个由一个或多个列组成的主键来对每行数据进行唯一索引，相比于传统的关系型数据库，kudu在索引上有更多的限制，比如暂时不支持二级索引，不支持主键的更新等等。
+ 
+尽管表结构类似于关系型数据库，但是Kudu自身并不提供SQL类型的语法接口，而是由上层其他系统实现，比如目前通过Impala提供SQL语法支持。
+ 
+Kudu底层API，主要面对简单的更新检索操作，Insert／Update／Delete等必须指定一个主键进行，而Scan检索类型的操作则支持条件过滤和投影等能力。
+
+Kudu产品的几个要点：
+
+* 数据模型和关系数据库类似，为结构化的表；列的数量有限（和HBase/Cassandra相比较而言）
+* 内部数据组织方式为列式存储
+* 很好的横向扩展能力，目前测试的是275个节点（3PB），计划支持到上千个节点(几十PB)
+* 不错的性能，集群能达到百万级别的TPS，单节点吞吐为几个GB/s
+* 本身不提供SQL接口，只支持类似NoSQL的接口，如 Insert(), Update(), Delete() and Scan() 等
+* 通过与 Spark 和 Impala 等（Drill，Hive的支持还在进行中）的集成，对外提供基于 SQL 的查询分析服务
+
+Kudu 和 Spark 集成后，能带来的好处：
+
+* 带来和 Parquet 相似的扫描性能，但却不存在数据更新/插入的延迟，也就是说，对数据的实时更新/插入，对分析应用来说是即时可见的，无延迟。
+* Spark对数据的过滤条件（基于判定的过滤条件，即 predicate）可以下推到 Kudu 这一存储层，能提高数据读取/扫描的性能
+* 相对 Parque，基于主键索引的查询，性能更高
+
+Kudu比较重要的两个点是C++和raft：
+
+* C++的性能比较有保障，还没有gc的停顿导致的响应时间不可控等问题，raft的心跳也因为没有gc可以设的敏感一些，可用性更好，而这些都是HBase的痛点。
+
+* 用raft协议实现replication意味着不需要HDFS了，而且Raft的一致性比较自由，追求性能可以最终一致性地读。
+
+##### 集群架构
+ 
+Kudu的集群架构基本和HBase类似，采用主从结构，Master节点管理元数据，Tablet节点负责分片管理数据，
+ 
+和HBase不同的是，Kudu没有借助于HDFS存储实际数据，而是自己直接在本地磁盘上管理分片数据，包括数据的Replication机制，kudu的Tablet server直接管理Master分片和Slave分片，自己通过raft协议解决一致性问题等，多个Slave可以同时提供数据读取服务，相对于HBase依托HDFS进行Region数据的管理方式，自主性会强一些，不过比如Tablet节点崩溃，数据的迁移拷贝工作等，也需要Kudu自己完成。
+ 
+
+##### 存储结构
+和HBase一样，Kudu也是通过Tablet的分区来支持水平扩展，与HBase不同的是，Kudu的分区策略除了支持按照Key Range来分区以外，还支持Hash based的策略，实际上，在主键上，Kudu可以混合使用这两种不同的策略。
+ 
+Hash分区的策略在一些场合下可以更好的做到负载均衡，避免数据倾斜，但是它最大的问题就是分区数一旦确定就很难再调整，所以目前Kudu的分区数必须预先指定（对Range的分区策略也有这个要求，估计是先简单化统一处理），不支持动态分区分裂，合并等，因此表的分区一开始就需要根据负载和容量预先进行合理规划。
+
+#### Use Cases
+
+Kudu 最适合的场景包含这两个特点：
+
+* 同时有顺序和随机读写的场景
+* 对数据更新的时效性要求比较高
+
+这样的场景有：
+
+* 和时间序列相关的数据分析：对市场/销售数据的实时分析；反欺诈；网络监控等
+* 在线报表和数据仓库应用：如ODS（Operational Data Store）
+
+小米使用Kudu的一个具体场景，需求是要收集手机App和后台服务发送的 RPC 跟踪事件数据，然后构建一个服务监控和问题诊断的工具，要求：
+
+* 高写入吞吐：每天大于200亿条记录
+* 为了能够尽快定位和解决问题，要求系统能够查询最新的数据并能快速返回结果
+* 为了方便问题诊断，要求系统能够查询/搜索明细数据（而不只是统计信息）
+
+在没有使用kudu之前，方案的架构如下：
+
+![kudu-case-pre](media/32-DistributedSQLTransation/kudu-case-pre.png)
+
+这是典型的Lambda架构（存在两套相对独立的数据流水线：批处理和流处理），一部分源系统数据是通过Scribe（日志聚合系统）把数据写到HDFS，另一部分源系统数据（实时性要求较高的？）是直接写入HBase，然后：
+
+* 为了能支持交互式/实时的查询，需要通过Hive/MR/Spark作业把这两部分数据合并成 Parquet 格式存放在HDFS，通过 Impala 对外提供交互式查询服务
+* 线下分析的就直接通过运行 Hive/MR/Spark 作业来完成
+
+我们可以看到，这样的数据线比较长，带来两个问题：
+
+* 其一是数据时效性较差（一个小时到一天）；
+* 其二是需要多次数据转换（如：HFile + seqfile ==> Parquet）
+
+还有一个问题，存储层中数据不是按照时间戳来排序，如果有部分数据没有及时到达，那么为了统计某一天的数据，可能就要读取好几天的数据才能得到。
+
+使用了Kudu以后，方案的架构如下图所示。
+
+![kudu-case-after](media/32-DistributedSQLTransation/kudu-case-after.png)
+
+数据都存储在Kudu中，分两条线进入Kudu：
+
+* 对于需要做加工（ETL）的数据或来自压力较大的系统的数据（产生的数据较多，源系统无法长时间缓存）可以先进入Kafka缓存，然后通过Storm做实时的ETL后进入Kudu，这种情况的延时在 0~10秒的区间
+* 反之，源系统的数据可以直接写入 Kudu，这种情况数据没有任何延迟
+
+然后，一方面可以通过 Impala 对外提供交互式查询服务（基于SQL），另一方面也可以直接通过 Kudu API 直接访问数据。
+
+这样的架构带来的好处比较明显，一方面是大大提高数据的时效性，另一方面大大简化系统架构。
+
+Kudu + Impala 的方案与 MPP 数据库产品（如 Greenplum，Vertica 和 Teradata）进行对比，但是由于时间关系视频中没有讲，这里简单提一下：
+
+他们有存在相似之处：
+
+* 提供基于SQL的交互式快速查询/分析
+* 能够提供插入、更新和删除操作
+
+相对于 MPP 数据库，Kudu + Impala 方案的优势：
+
+* 更快的流式数据插入（streaming insert）
+* 和 Hadoop 生态体系有较好的集成：
+  * 把 Kudu 和 HDFS 部署在同一个集群，可以关联分别存储在 Kudu 和 HDFS 上的表
+  * 和 Spark，Flume等的集成度较好
+
+相对于 MPP 数据库，Kudu + Impala 方案的劣势：
+
+* 批量插入的性能相对较慢
+* 不支持数据装载的原子操作，不支持跨行的原子操作，不支持二级索引v
 
 ### SequoiaDB
 
@@ -241,9 +362,7 @@ BDRT具有包括Java、Python、Scala SDK，RESTFul API，SQL等多种读写接�
 
 ## 开源SQL引擎介绍
 
-[6大主流开源SQL引擎总结](http://www.toutiao.com/a6392538584179720449/?tt_from=email&utm_campaign=client_share&app=news_article_social&utm_source=email&iid=9347877982&utm_medium=toutiao_ios)
-
-Hive、Impala、Spark SQL、Drill、HAWQ 、Presto、Druid、Calcite、Kylin、Phoenix、Tajo 和Trafodion。2个商业化选择Oracle Big Data SQL 和IBM Big SQL（BigSQL 3.0 包含在 [BigInsights 3.0](https://www.ibm.com/analytics/us/en/technology/hadoop/) ），IBM 尚未将后者更名为“Watson SQL”。
+开源SQL引擎有Hive、Impala、Spark SQL、Drill、HAWQ 、Presto、Druid、Calcite、Kylin、Phoenix、Tajo 和Trafodion，2个商业化选择Oracle Big Data SQL 和IBM Big SQL（BigSQL 3.0 包含在 [BigInsights 3.0](https://www.ibm.com/analytics/us/en/technology/hadoop/) ），IBM 尚未将后者更名为“Watson SQL”。
 
 不像关系型数据库，SQL 引擎独立于数据存储系统（相对而言，关系型数据库将查询引擎和存储绑定到一个单独的紧耦合系统中），提供了更大的灵活性，尽管存在潜在的性能损失。
 
@@ -257,8 +376,7 @@ https://db-engines.com/en/ranking
 * Hive 已经在减少和其他引擎的性能差距。大多数Hive 的替代者在2012年推出，当Impala、Spark、Drill 等大步发展的时候，Hive只是慢慢改进。现在，虽然Hive 不是最快的选择，但是它比五年前要好得多；
 * 虽然速度很重要，但是海量数据下查询的稳定性更重要。
 
-对于开源项目来说，最佳的健康度量是它的活跃开发者社区的大小。如下图所示，Hive 和Presto 有最大的贡献者基础。（Spark SQL 的数据暂缺）
-数据来源：[Open Hub](https://www.openhub.net/)
+对于开源项目来说，最佳的健康度量是它的活跃开发者社区（[Open Hub](https://www.openhub.net/)）的大小。Hive 和Presto 有最大的贡献者基础。v
 
 ### Apache Hive
 
@@ -411,10 +529,7 @@ Spanner 是一个 CP + HA 系统，官方文档说的可用性是优于 5 个 9 
 
 当然，当整个集群真的出现了灾难性的事故，导致大多数节点都出现了问题，整个系统就不可能服务了，但是这个概率是非常小的。而且我们可以通过增加更多的副本数来降低这个概率发生。据传在一些关键数据上面，Spanner 都有 7 个副本。
 
-
 CAP并不适合再作为一个适应任何场景的定理，它的正确性更加适合基于原子读写的NoSQL场景。
-
-
 
 ### ACID
 传统的SQL数据库的事务通常都是支持ACID的强事务机制。
@@ -1047,6 +1162,38 @@ Google的Chubby、Megastore（发表的论文里有关于mulit-paxos的公开细
 
 在实际应用中，zookeeper、ectd均存在租约颁发。
 
+#### Gossip算法
+
+Gossip算法如其名，灵感来自办公室八卦，只要一个人八卦一下，在有限的时间内所有的人都会知道该八卦的信息，这种方式也与病毒传播类似，因此Gossip有众多的别名“闲话算法”、“疫情传播算法”、“病毒感染算法”、“谣言传播算法”。
+
+Gossip是一种去中心化、容错并保证最终一致性的协议。Gossip是一个带冗余的容错算法，更进一步，Gossip是一个最终一致性算法。虽然无法保证在某个时刻所有节点状态一致，但可以保证在”最终“所有节点一致，”最终“是一个现实中存在，但理论上无法证明的时间点。
+
+Gossip协议是基于一种叫做SWIM的协议（ Scalable Weakly-consistent Infection-style Process Group Membership Protocol）。SWIM是一种无中心的分布式协议，各个节点之间通过p2p实现信息交流同步各节点状态的方法。看名字也知道这是一种弱一致性的实现。
+
+因为Gossip不要求节点知道所有其他节点，因此又具有去中心化的特点，节点之间完全对等，不需要任何的中心节点。实际上Gossip可以用于众多能接受“最终一致性”的领域：失败检测、路由同步、Pub/Sub、动态负载均衡。
+
+但Gossip的缺点也很明显，冗余通信会对网路带宽、CUP资源造成很大的负载，而这些负载又受限于通信频率，该频率又影响着算法收敛的速度。
+
+Cassandra和ElasticSearch的自动发现节点机制都是使用了Gossip算法。
+
+Cassandra实现了基于整体协调的push/push模式，有几个组件：
+
+三条消息分别对应push/pull的三个阶段：
+
+* GossipDigitsMessage
+* GossipDigitsAckMessage
+* GossipDigitsAck2Message
+
+还有三种状态：
+* EndpointState：维护宿主数据的全局version，并封装了HeartBeat和ApplicationState
+* HeartBeat：心跳信息
+* ApplicationState：系统负载信息（磁盘使用率）
+
+Cassandra主要是使用Gossip完成三方面的功能：
+* 失败检测
+* 动态负载均衡
+* 去中心化的弹性扩展
+
 #### Paxos 一致性算法
 
 Paxos 算法解决的问题是一个分布式系统如何就某个值（决议）达成一致。一个典型的场景是，在一个分布式数据库系统中，如果各节点的初始状态一致，每个节点执行相同的操作序列，那么他们最后能得到一个一致的状态。为保证每个节点执行相同的命令序列，需要在每一条指令上执行一个“一致性算法”以保证每个节点看到的指令一致。一个通用的一致性算法可以应用在许多场景中，是分布式计算中的重要问题。因此从20世纪80年代起对于一致性算法的研究就没有停止过。节点通信存在两种模型：共享内存（Shared memory）和消息传递（Messages passing）。Paxos 算法就是一种基于消息传递模型的一致性算法。
@@ -1186,13 +1333,6 @@ Paxos过程结束了，这样，一致性得到了保证，算法运行到最后
 
 paxos最终仍然无法解决两军问题。在上面的场景中，按paxos算法的定义，最后是达成了一个共同的进攻时间，3军中的任何一方都可以通过paxos算法读取出这个进攻时间。但3军怎么知道在什么时候去读取、其他人是否已经读取，这是一个和两军问题同样的问题；同时由于通信兵可能无限延迟，可能部分蓝军在进攻时间之前读取到了，部分蓝军可能在进攻时间之后才读取到，所以两军最终还是无解的。
 
-
-[如何浅显易懂地解说 Paxos 的算法](https://www.zhihu.com/question/19787937)
-
-[以两军问题为背景来演绎Basic Paxos](http://iunknown.iteye.com/blog/2246484?from=message&isappinstalled=0)
-
-[paxos slide](http://drmingdrmer.github.io/pdf/paxos-slide/paxos.html)
-
 #### 分布式协调和配置服务
 
 etcd是一个高可用的键值存储系统，主要用于共享配置和服务发现。它使用Go语言编写，并通过Raft一致性算法处理日志复制以保证强一致性。Raft是一个来自Stanford的新的一致性算法，适用于分布式系统的日志复制，Raft通过选举的方式来实现一致性，在Raft中，任何一个节点都可能成为Leader。etcd 集群的工作原理基于 raft 共识算法 (The Raft Consensus Algorithm)。raft 共识算法的优点在于可以在高效的解决分布式系统中各个节点日志内容一致性问题的同时，也使得集群具备一定的容错能力。即使集群中出现部分节点故障、网络故障等问题，仍可保证其余大多数节点正确的步进。甚至当更多的节点（一般来说超过集群节点总数的一半）出现故障而导致集群不可用时，依然可以保证节点中的数据不会出现错误的结果。
@@ -1226,8 +1366,6 @@ ZooKeeper可以保证如下分布式一致性特性。
 5. 实时性（Timeliness）：
 Zookeeper仅保证在一定时间内，客户端最终一定能够从服务端读到最新的数据状态。
 
-[ZAB协议](http://blog.csdn.net/bohu83/article/details/51356773)
-
 ZooKeeper为高可用的一致性协调框架，并没有完全采用paxos算法，而是使用了ZAB（ZooKeeper Atomic Broadcast ）原子消息广播协议作为数据一致性的核心算法，ZAB协议是专为zookeeper设计的支持崩溃恢复原子消息广播算法。
 
 基于ZAB协议，zookeeper实现了一种基于主备模式的系统架构来保证集群中各副本之间的数据一致性。具体的：ZooKeeper使用单一主进程Leader用于处理客户端所有事务请求，采用ZAB协议将服务器数状态以事务形式广播到所有Follower上，因此能很好的处理客户端的大量并发请求（这里我理解就是ZK通过使用TCP协议及一个事务ID来实现事务的全序特性，leader模式就是先到先执行解决因果顺序）；另一方面,由于事务间可能存在着依赖关系，ZAB协议保证Leader广播的变更序列被顺序的处理，一个状态被处理那么它所依赖的状态也已经提前被处理；最后，考虑到住进程leader在任何时候可能崩溃或者异常退出，因此ZAB协议还要Leader进程崩溃的时候可以重新选出Leader并且保证数据的完整性；
@@ -1238,19 +1376,16 @@ ZooKeeper为高可用的一致性协调框架，并没有完全采用paxos算法
 
 ZAB协议中存在着三种状态，每个节点都属于以下三种中的一种：
 1. Looking：系统刚启动时或者Leader崩溃后正处于选举状态
-2. Following：Follower节点所处的状态，Follower与Leader处于数据同步阶段；
-3. Leading：Leader所处状态，当前集群中有一个Leader为主进程；
+2. Following：Follower节点所处的状态，Follower与Leader处于数据同步阶段
+3. Leading：Leader所处状态，当前集群中有一个Leader为主进程
 
 ZAB是一种paxos算法的简化:
 
 ZAB协议可以细分为三个阶段：发现（discovery）、同步（sync）、广播(Broadcast)。
 
-ZooKeeper启动时所有节点初始状态为Looking，这时集群会尝试选举出一个Leader节点，选举出的Leader节点切换为Leading状态；当节点发现集群中已经选举出Leader则该节点会切换到Following状态，然后和Leader节点保持同步；当Follower节点与Leader失去联系时Follower节点则会切换到Looking状态，开始新一轮选举；在ZooKeeper的整个生命周期中每个节点都会在Looking、Following、Leading状态间不断转换；
+ZooKeeper启动时所有节点初始状态为Looking，这时集群会尝试选举出一个Leader节点，选举出的Leader节点切换为Leading状态；当节点发现集群中已经选举出Leader则该节点会切换到Following状态，然后和Leader节点保持同步；当Follower节点与Leader失去联系时Follower节点则会切换到Looking状态，开始新一轮选举；在ZooKeeper的整个生命周期中每个节点都会在Looking、Following、Leading状态间不断转换。
 
-选举出Leader节点后ZAB进入原子广播阶段，这时Leader为和自己同步的每个节点Follower创建一个操作序列，一个时期一个Follower只能和一个Leader保持同步，Leader节点与Follower节点使用心跳检测来感知对方的存在；当Leader节点在超时时间内收到来自Follower的心跳检测那Follower节点会一直与该节点保持连接；若超时时间内Leader没有接收到来自过半Follower节点的心跳检测或TCP连接断开，那Leader会结束当前周期的领导，切换到Looking状态，所有Follower节点也会放弃该Leader节点切换到Looking状态，然后开始新一轮选举；
-
-
-
+选举出Leader节点后ZAB进入原子广播阶段，这时Leader为和自己同步的每个节点Follower创建一个操作序列，一个时期一个Follower只能和一个Leader保持同步，Leader节点与Follower节点使用心跳检测来感知对方的存在；当Leader节点在超时时间内收到来自Follower的心跳检测那Follower节点会一直与该节点保持连接；若超时时间内Leader没有接收到来自过半Follower节点的心跳检测或TCP连接断开，那Leader会结束当前周期的领导，切换到Looking状态，所有Follower节点也会放弃该Leader节点切换到Looking状态，然后开始新一轮选举。
 
 #### Etcd 架构与实现
 
@@ -1367,7 +1502,9 @@ watch机制更稳定，基本上可以通过watch机制实现数据的完全同�
 
 一致性哈希基本解决了在P2P环境中最为关键的问题——如何在动态的网络拓扑中分布存储和路由。每个节点仅需维护少量相邻节点的信息，并且在节点加入/退出系统时，仅有相关的少量节点参与到拓扑的维护中。所有这一切使得一致性哈希成为第一个实用的DHT（Distributed Hash Table，分布式哈希表）算法。
 
-## Spanner & TiDB中的事务
+## 开源分布式数据库关键技术
+
+### Spanner & TiDB中的事务
 
 Spanner 默认将数据使用 range 的方式切分成不同的 splits，就跟 TiKV 里面 region 的概念比较类似。每一个 Split 都会有多个副本，分布在不同的 node 上面，各个副本之间使用 Paxos 协议保证数据的一致性。
 
@@ -1437,9 +1574,7 @@ TiDB 也使用的是一个 2PC 方案，采用的是优化的类 Google Percolat
 
 TiDB 在 Leader 上面的读大部分走的是 lease read，也就是只要 Leader 能够确定自己仍然在 lease 有效范围里面，就可以直接读，如果不能确认，我们就会走 Raft 的 ReadIndex 机制，让 Leader 跟其他节点进行 heartbeat 交互，确认自己仍然是 Leader 之后在进行读操作。
 
-## 分布式数据库 Schema 设计
-
-[关于 TiDB 的正确使用姿势](https://zhuanlan.zhihu.com/p/25574778)
+### 分布式数据库 Tidb 的正确使用 
 
 分布式数据库在表结构设计的时候需要考虑的事情和传统的单机数据库不太一样，需要开发者能够带着「这个表的数据会分散在不同的机器上」这个前提，才能做更好的设计。
 
@@ -1564,6 +1699,11 @@ t 和 s 可以根据索引的数据分布来确定选择索引 c3 还是 c2。
 * 编译本机性能
 * 垃圾收集和类型安全提供稳定性
 * 良好的代码可读行
+
+### Impala和Kudu为什么使用C++语言实现
+
+* C++的性能比较有保障，还没有gc的停顿导致的响应时间不可控等问题。
+
 
 ### BDRT为什么使用JAVA语言实现
 
