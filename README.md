@@ -4,6 +4,7 @@
 
 [useast ECS](00-useastECS.md)
 
+[cow](00-cow.md)
 
 ## 常用软件配置和使用
 
