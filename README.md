@@ -23,6 +23,8 @@
 
 [kubernetes](20-kubernetesInstall.md)
 
+[tectonic](20-tectonicInstall.md)
+
 [TiDB和CrDB编译安装](20-TidbCrdbInstall.md)
 
 [docker swarm 搭建tidb和crdb](20-TidbCrdbOnDocker.md)
@@ -38,6 +40,8 @@
 ### 收集
 
 [分布式SQL数据库](32-DistributedSQLTransation.md)
+
+[分布式SQL数据库幻灯片](32-DistributedSQLTransationPPT.md)
 
 [Tidb技术](32-TidbTech .md)
 

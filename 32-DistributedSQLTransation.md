@@ -144,7 +144,7 @@ TiDB 本质上是一个更加正统的 Spanner 和 F1 实现，并不像 Cockroa
 
 和 F1 一样，TiDB 是一个无状态的 MPP SQL Layer，整个系统的底层是依赖 TiKV 来提供分布式存储和分布式事务的支持。TiKV 的分布式事务模型采用的是 Google Percolator 的模型，但是在此之上做了很多优化。Percolator 的优点是去中心化程度非常高，整个集群不需要一个独立的事务管理模块，事务提交状态这些信息其实是均匀分散在系统的各个 Key 的 meta 中，整个模型唯一依赖的是一个授时服务器。极限情况这个授时服务器每秒能分配 400w 以上个单调递增的时间戳，大多数情况基本够用了（毕竟有 Google 量级的场景并不多见）；同时在 TiKV 中，这个授时服务本身是高可用的，也不存在单点故障的问题。
 
-TiKV 和 CockroachDB 一样也是选择了 Raft 作为整个数据库的基础；不一样的是，TiKV 整体采用 Rust 语言开发，作为一个没有 GC 和 Runtime 的语言，在性能上可以挖掘的潜力会更大。
+TiKV 和 CockroachDB 一样也是选择了 Raft 作为整个数据库的基础；不一样的是，TiKV 整体采用 Rust 语言开发，作为一个没有 GC 和 Runtime 的语言，在性能上可以挖掘的潜力会更大。v
 
 ### CockroachDB
 CockroachDB是一个基于事务和强一致性键值存储构建的分布式SQL数据库。 它支持水平缩放; 可以容忍磁盘、机器、机架，甚至数据中心故障，并能在极短时间内无需人工干预的恢复服务; 支持强一致的ACID事务; 并提供了类SQL API来构造、操作和查询数据。
@@ -1534,10 +1534,10 @@ Sharding按分区类型分为：
 
 Spanner 默认将数据使用 range 的方式切分成不同的 splits，就跟 TiKV 里面 region 的概念比较类似。每一个 Split 都会有多个副本，分布在不同的 node 上面，各个副本之间使用 Paxos 协议保证数据的一致性。
 
-Spanner 对外提供了 read-only transaction 和 read-write transaction 两种事物，这里简单的介绍一下，主要参考 [Spanner](https://cloud.google.com/spanner/docs/whitepapers/LifeCloudSpannerReadWrite.pdf) 的白皮书。
+Spanner 对外提供了 read-only transaction 和 read-write transaction 两种事务，这里简单的介绍一下，主要参考 [Spanner](https://cloud.google.com/spanner/docs/whitepapers/LifeCloudSpannerReadWrite.pdf) 的白皮书。
 
 ### Single Split Write
-假设 client 要插入一行数据 Row 1，这种情况我们知道，这一行数据铁定属于一个 split，spanner 在这里使用了一个优化的 1PC 算法，流程如下：
+假设 client 要插入一行数据 Row 1，这种情况我们知道，这一行数据肯定属于一个 split，spanner 在这里使用了一个优化的 1PC 算法，流程如下：
 
 1. API Layer 首先找到 Row 1 属于哪一个 split，譬如 Split 1。
 2. API Layer 将写入请求发送给 Split 1 的 leader。

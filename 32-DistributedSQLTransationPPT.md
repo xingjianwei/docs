@@ -489,3 +489,72 @@ paxos协议的流程分为了两个阶段：
 ---
 ## 分布式数据库性能测试
 ---
+note:
+参考答案1.A 2.D 3.A 4.B 5.B 6.BC 7.ABD 8.ABCD 9.AB 10.ABC
+单选题
+
+1.严格一致性存在的问题是（）
+A.	依赖于绝对的全局时间
+B.	不依赖于绝对的全局时间
+C.	依赖于并发控制算法
+D.	不依赖于并发控制算法
+
+2.CAP理论中不包括（）
+A.	可用性
+B.	一致性
+C.	分区容错性
+D.	持久性
+
+
+3.Spanner利用了什么技术来解决时钟同步问题（）
+A.	True Time（原子钟+GPS）
+B.	Hybrid Logic Clock（NTP+逻辑时钟）
+C.	TSO（中心授时）
+D.	Vector Clock（时钟+版本）
+
+4.Zookeeper是基于下列哪个协议（）
+A.	Paxos
+B.	Zab
+C.	Raft
+D.	VR
+
+5.分布式系统最核心的问题是（）
+A.	读写分离
+B.	并发一致性
+C.	横向扩展
+D.	SQL支持
+
+多选题
+
+6.下列SQL引擎中由facebook开源的是（）
+A.	Impala
+B.	HIVE
+C.	Presto
+D.	Kylin
+
+7.下列哪些属于图形数据库或引擎（）
+A.	NEO4J
+B.	BDCN
+C.	BDRT
+D.	Spark GraphX
+
+8.下列支持事务的分布式数据库及引擎有（）
+A.	Spanner
+B.	TIDB
+C.	BDRT
+D.	CockroachDB
+
+9.下列基于列存储的数据库有（）
+A.	Cassandra
+B.	HBase
+C.	MongoDB
+D.	Redis
+
+10.下列属于解决分布式事务一致性的协议有（）
+A.	2PC
+B.	3PC
+C.	XA
+D.	Gossip
+
+
+---
