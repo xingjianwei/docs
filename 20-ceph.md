@@ -743,9 +743,10 @@ cep服务会自动启动修复pg。
 `/etc/init.d/sysprobe start`
 在mon节点：
 ```
-/etc/init.d/cephrestapi start
-/etc/init.d/cephprobe start
+vi /etc/rc.local
 /etc/init.d/sysprobe start
+/etc/init.d/cephprobe start
+/etc/init.d/ceph-rest-api start  2>&1 > /var/log/ceph/ceph_rest_api
 ```
 
 ## 日常运维
