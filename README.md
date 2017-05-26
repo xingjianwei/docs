@@ -43,6 +43,8 @@
 
 [InfluxDB](32-InfluxDB.md)
 
+[Solr VS Elasticsearch](32-SolrVSElasticSearch.md)
+
 ### 翻译
 
 [Cockroach Design 翻译](33-CockroachDesign.md)
