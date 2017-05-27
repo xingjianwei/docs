@@ -1,6 +1,14 @@
 # TiDB和CrDB编译安装
 
-## CockroachDB编译
+## CockroachDB macosX编译
+
+beta-20170423后，编译变化较大。
+
+clang和gcc共存时，使用gcc导致google protobuf 和 rocksdb编译出现错误。ld: symbol(s) not found for architecture x86_64。
+所以必须使用clang，设置`$PATH=/usr/bin:$PATH`。
+
+## CockroachDB docker编译
+
 [编译方法介绍](https://github.com/cockroachdb/cockroach/tree/master/build)
 ### 下载镜像
 github.com/cockroachdb/cockroach/build/deploy/Dockerfile所需镜像
