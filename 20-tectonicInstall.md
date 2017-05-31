@@ -16,3 +16,23 @@
 
 
 ## Matchbox
+
+### Generate TLS Certificates
+
+```
+tar xzvf matchbox-v0.6.1-linux-amd64.tar.gz
+cd matchbox-v0.6.1-linux-amd64
+cd scripts/tls
+export SAN=DNS.1:matchbox.tectoniclocal.com,IP.1:172.16.210.3
+./cert-gen
+
+sudo mkdir -p /etc/matchbox
+sudo cp ca.crt server.crt server.key /etc/matchbox
+```
+
+Save `client.crt`, `client.key`, and `ca.crt` for later use (e.g. `~/.matchbox`).
+
+```
+mkdir -p /home/docker/volumes/matchbox/assets
+sudo docker run --net=host -d -v /home/docker/volumes/matchbox:/var/lib/matchbox:Z -v /etc/matchbox:/etc/matchbox:Z,ro quay.io/coreos/matchbox:latest -address=0.0.0.0:8090 -rpc-address=0.0.0.0:8091 -log-level=debug
+```
