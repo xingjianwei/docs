@@ -36,3 +36,23 @@ Save `client.crt`, `client.key`, and `ca.crt` for later use (e.g. `~/.matchbox`)
 mkdir -p /home/docker/volumes/matchbox/assets
 sudo docker run --net=host -d -v /home/docker/volumes/matchbox:/var/lib/matchbox:Z -v /etc/matchbox:/etc/matchbox:Z,ro quay.io/coreos/matchbox:latest -address=0.0.0.0:8090 -rpc-address=0.0.0.0:8091 -log-level=debug
 ```
+
+## coreos/dnsmasq
+
+Run DHCP, TFTP, and DNS on the host's network:
+
+```
+sudo docker run -d --cap-add=NET_ADMIN --net=host quay.io/coreos/dnsmasq \
+  -d -q \
+  --dhcp-range=172.16.210.100,172.16.210.119 \
+  --enable-tftp --tftp-root=/var/lib/tftpboot \
+  --dhcp-userclass=set:ipxe,iPXE \
+  --dhcp-boot=tag:#ipxe,undionly.kpxe \
+  --dhcp-boot=tag:ipxe,http://matchbox.tectoniclocal.com:8090/boot.ipxe \
+  --address=/matchbox.tectoniclocal.com/172.16.210.3 \
+  --log-queries \
+  --log-dhcp
+```
+Be sure to allow enabled services in your firewall configuration.
+`sudo firewall-cmd --add-service=dhcp --add-service=tftp --add-service=dns`
+
