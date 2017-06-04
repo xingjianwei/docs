@@ -12,6 +12,8 @@
 
 [homebrew](10-homebrew.md)
 
+[golang](10-golang.md)
+
 ## 软件安装
 
 [openldap](20-openldap.md)
