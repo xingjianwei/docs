@@ -9,6 +9,8 @@
 
 [vscode](10-vscode.md)
 
+[homebrew](10-homebrew.md)
+
 ## 软件安装
 
 [openldap](20-openldap.md)
