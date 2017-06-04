@@ -4,6 +4,7 @@
 
 [useast ECS](00-useastECS.md)
 
+[cow](00-cow.md)
 
 ## 常用软件配置和使用
 
@@ -25,6 +26,8 @@
 
 [kubernetes](20-kubernetesInstall.md)
 
+[tectonic](20-tectonicInstall.md)
+
 [TiDB和CrDB编译安装](20-TidbCrdbInstall.md)
 
 [docker swarm 搭建tidb和crdb](20-TidbCrdbOnDocker.md)
@@ -41,9 +44,13 @@
 
 [分布式SQL数据库](32-DistributedSQLTransation.md)
 
+[分布式SQL数据库幻灯片](32-DistributedSQLTransationPPT.md)
+
 [Tidb技术](32-TidbTech .md)
 
 [InfluxDB](32-InfluxDB.md)
+
+[Solr VS Elasticsearch](32-SolrVSElasticSearch.md)
 
 ### 翻译
 
