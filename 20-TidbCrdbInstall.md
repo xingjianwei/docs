@@ -11,20 +11,28 @@ clang和gcc共存时，使用gcc导致google protobuf 和 rocksdb编译出现错
 
 [编译方法介绍](https://github.com/cockroachdb/cockroach/tree/master/build)
 ### 下载镜像
-github.com/cockroachdb/cockroach/build/deploy/Dockerfile所需镜像
+https://github.com/cockroachdb/cockroach/blob/master/build/deploy/Dockerfile 所需镜像
+
 运行部署基础镜像：
 debian:8.7
 
 开发编译基础镜像：
+https://github.com/cockroachdb/cockroach/blob/master/build/Dockerfile文件中所需镜像
+
+编译环境基础镜像：
 ubuntu:xenial-20170214
 
+```
+cd build/
 ./builder.sh init
+```
+
 ### 开发环境
 
 ```
 docker tag cockroachdb/builder  cockroachdb/builder:$verson
-(docker tag cockroachdb/builder  cockroachdb/builder:20170228-215146)
-取自pkg/acceptance/cluster/localcluster.go中的builderTag       = "20170228-215146"
+(docker tag cockroachdb/builder  cockroachdb/builder:20170422-212842)
+取自pkg/acceptance/cluster/localcluster.go中的builderTag       = "20170422-212842"
 sh builder.sh
 
 ```
