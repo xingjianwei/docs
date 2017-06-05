@@ -2,7 +2,7 @@
 
 ## Phoenix定义
 
-Phoenix最早由saleforce开源，后给贡献给Apache基金会的项目，现在是Apache基金的顶级项目，最新版本是4.10.0。Apache Phoenix在hadoop基础上的构建低延时应用可以做到在OLTP与决策分析上做到完美结合：
+Phoenix是最早由saleforce开源，后贡献给Apache基金会的项目，现在是Apache基金的顶级项目，最新版本是4.10.0。Apache Phoenix在hadoop基础上的构建低延时应用可以做到在OLTP与决策分析上做到完美结合：
 
 - 标准SQL与JDBC API，并拥有完整的ACID事务能力
 - 通过构建在Hbase之上，为NOSQL带来灵活的late-bound，schema-on-read能力
