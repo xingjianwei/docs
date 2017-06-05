@@ -14,6 +14,8 @@
 
 [golang](10-golang.md)
 
+[nodejs](10-nodejs.md)
+
 ## 软件安装
 
 [openldap](20-openldap.md)
