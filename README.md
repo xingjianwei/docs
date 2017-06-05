@@ -56,6 +56,8 @@
 
 [Solr VS Elasticsearch](32-SolrVSElasticSearch.md)
 
+[Phoenix](32-Phoenix.md) 
+
 ### 翻译
 
 [Cockroach Design 翻译](33-CockroachDesign.md)
