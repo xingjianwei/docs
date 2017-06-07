@@ -57,8 +57,12 @@ Output build version information.
 	},
 }
 ```
-
-
+在Makefile中定义了info.Tag的值：
+```
+# The build.utcTime format must remain in sync with TimeFormat in pkg/build/info.go.
+$(COCKROACH) build buildoss go-install: override LINKFLAGS += \
+	-X "github.com/cockroachdb/cockroach/pkg/build.tag=$(shell cat .buildinfo/tag)" \
+```
 ### 包含的开源组件
 https://grafana.com/
 https://github.com/prometheus/prometheus

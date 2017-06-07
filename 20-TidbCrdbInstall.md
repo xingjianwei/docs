@@ -11,6 +11,10 @@ clang和gcc共存时，使用gcc导致google protobuf 和 rocksdb编译出现错
 
 [编译方法介绍](https://github.com/cockroachdb/cockroach/tree/master/build)
 ### 下载镜像
+1. 直接下载开发环境镜像：
+`docker pull   cockroachdb/builder:20170422-212842`
+
+2. 编译开发环境镜像：
 https://github.com/cockroachdb/cockroach/blob/master/build/deploy/Dockerfile 所需镜像
 
 运行部署基础镜像：
@@ -32,22 +36,44 @@ cd build/
 ```
 docker tag cockroachdb/builder  cockroachdb/builder:$verson
 (docker tag cockroachdb/builder  cockroachdb/builder:20170422-212842)
-取自pkg/acceptance/cluster/localcluster.go中的builderTag       = "20170422-212842"
+v1.0.1版本取自pkg/acceptance/cluster/localcluster.go中的builderTag       = "20170422-212842"，v1.1-alpha.20170601之后的版本直接在builder.sh中定义。
+
 sh builder.sh
 
 ```
 可以进入开发环境。
 
 ```
-make TYPE=release build
+make TYPE=release-linux-musl  build
 docker build --tag=cockroachdb/cockroach deploy
 docker run  cockroachdb/cockroach  version
 ```
+在Makefile文件中，通过`TYPE`类型的定义自动给`BUILD_TYPE`赋值。
 
+````
+# Possible values:
+# <empty>: use the default toolchain
+# release-linux-gnu:  target Linux 2.6.32, dynamically link GLIBC 2.12.2
+# release-linux-musl: target Linux 2.6.32, statically link musl 1.1.16
+# release-darwin:     target OS X 10.9
+# release-windows:    target Windows 8, statically link all non-Windows libraries
+#
+# All non-empty variants only work in the cockroachdb/builder docker image, as
+# they depend on cross-compilation toolchains available there.
+# The name of the cockroach binary depends on the release type.
+TYPE :=
+```
+
+如果不设置，默认`BUILD_TYPE := development`
+```
+make  BUILD_TYPE=release  build
+```
 ### 编译成可执行镜像
 
 ```
-./build-docker-deploy.sh
+cd build
+cp ../cockroach-linux-2.6.32-musl-amd64  deploy/cockroach
+docker build --tag=cockroachdb/cockroach deploy
 docker run  cockroachdb/cockroach  version
 docker run  -it  --entrypoint=""  cockroachdb/cockroach    bash
 ```
