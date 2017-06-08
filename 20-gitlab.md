@@ -4,10 +4,12 @@
 [合并参考文档2](http://blog.sina.com.cn/s/blog_6ff7a3b50102w4jk.html)
 [合并参考文档3](http://www.xuliangwei.com/xubusi/803.html)
 
-
-docker pull gitlab/gitlab-ce:9.1.0-ce.0
-
-docker pull gitlab/gitlab-ce:8.16.9-ce.0
+当前最新版本：
+`docker pull gitlab/gitlab-ce:9.2.5-ce.0`
+当前v8最新版本：
+`docker pull gitlab/gitlab-ce:8.17.6-ce.0`
+正在使用的版本：
+`docker pull gitlab/gitlab-ce:8.7.0-ce.0`
 
 ## gitlab数据备份和恢复
 

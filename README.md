@@ -50,6 +50,8 @@
 
 [分布式SQL数据库幻灯片](32-DistributedSQLTransationPPT.md)
 
+[NewSQL](32-NewSQL.md)
+
 [Tidb技术](32-TidbTech .md)
 
 [InfluxDB](32-InfluxDB.md)
