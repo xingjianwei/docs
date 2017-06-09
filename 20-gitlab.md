@@ -144,3 +144,14 @@ gitlab_rails['ldap_servers'] = YAML.load <<-'EOS'
 
 `docker exec -it gitlab-internal gitlab-rake gitlab:backup:restore BACKUP=1496887240`
 
+### 排错
+```
+OpenSSL::Cipher::CipherError (bad decrypt):
+```
+覆盖原来gitlab的 db_key_base 到新的gitlab 
+
+db_key_base 位置在 /etc/gitlab/gitlab-secrets.json
+
+`sudo gitlab-rails runner "Project.where.not(import_url: nil).each { |p| p.import_data.destroy if p.import_data }"`
+
+
