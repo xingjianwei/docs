@@ -17,14 +17,29 @@
  `ldapadd -x -D "cn=Manager,dc=beagledata,dc=com" -w Bxxxx -f  xxxx.ldif`
 
 ## GUI管理工具
-
 web管理-ldap-account-manager
 
-自助密码修改-self-service-password：
+用web界面根下创建一个posix group  allmember，否则会出现gidnumber的问题。
+
+在posix group allmember下Create a child entry 添加user account。uid设置为用户邮箱。
+```
+最后一个名字:邢建伟
+Common Name:邢建伟
+User ID:xingjw@beagledata.com
+密码：md5
+home目录：默认值为邮件地址不符合要求，要删除@，目录名不能有@等特殊字符。
+```
+
+
+## 自助密码修改-self-service-password：
+
 ```
 docker pull grams/ltb-self-service-password:1.0
 docker pull dtwardow/ldap-self-service-password:latest
 ```
+
+## 启动ldap server
+
 ```
 docker run --env LDAP_ORGANISATION="beagledata" --env LDAP_DOMAIN="beagledata.com" \
 --volume $PWD/ldap/slapd/database:/var/lib/ldap \
@@ -44,4 +59,5 @@ docker run -p 6443:443 --name phpldapadmin-service --hostname phpldapadmin-servi
 https://xxxx:6443/
 Login DN: cn=admin,dc=beagledata,dc=com
 Password: xxxx
-f
+
+

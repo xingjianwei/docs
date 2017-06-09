@@ -32,7 +32,7 @@ Gitlab备份：
 `gitlab_rails['backup_path'] = "/var/opt/gitlab/backups"`
 `/var/opt/gitlab/backups`修改为你想存放备份的目录即可, 修改完成之后使用`gitlab-ctl reconfigure`命令重载配置文件即可.
 
-Gitlab备份：
+### Gitlab备份：
 ```
 # 停止相关数据连接服务
 gitlab-ctl stop unicorn
@@ -41,7 +41,7 @@ gitlab-ctl stop sidekiq
 gitlab-rake gitlab:backup:restore BACKUP=1481598919
 ```
 
-# 启动Gitlab
+### 启动Gitlab
 sudo gitlab-ctl start
 
 ### gitlab迁移
@@ -57,5 +57,90 @@ ok: down: unicorn: 0s, normally up
 [root@linux-node1 ~]# gitlab-ctl stop sidekiq
 ok: down: sidekiq: 0s, normally up
 [root@linux-node1 ~]# chmod 777 /var/opt/gitlab/backups/1481598919_gitlab_backup.tar
-[root@linux-node1 ~]# gitlab-rake gitlab:backup:restore BACKUP=1481598919
+[root@linux-node1 ~]# gitlab-rake gitlab:backup:restore BACKUP=1496887240
 ```
+
+## 使用docker部署gitlab应用
+https://docs.gitlab.com/omnibus/docker/
+
+```
+sudo docker run --detach \
+    --hostname gitlab.example.com \
+    --env GITLAB_OMNIBUS_CONFIG="external_url 'http://www.example.com:8929'; gitlab_rails['gitlab_shell_ssh_port'] = 8922;" \
+    --publish 8929:8929 --publish 8922:22 \
+    --name gitlab-internal \
+    --restart always \
+    --volume /srv/gitlab/config:/etc/gitlab \
+    --volume /srv/gitlab/logs:/var/log/gitlab \
+    --volume /srv/gitlab/data:/var/opt/gitlab \
+    gitlab/gitlab-ce:latest
+```
+
+docker-compose.yml file (or download an example):
+```
+gitlab-internal:
+  image: 'gitlab/gitlab-ce:8.7.0-ce.0'
+  restart: always
+  hostname: 'gitlab-internal.example.com'
+  environment:
+    GITLAB_OMNIBUS_CONFIG: |
+      external_url 'http://www.example.com:8929'
+      # Add any other gitlab.rb configuration here, each on its own line
+      gitlab_rails['gitlab_shell_ssh_port'] = 8922
+  ports:
+    - '8929:8929'
+    - '8922:8922'
+  volumes:
+    - '.gitlab/config:/etc/gitlab'
+    - '.gitlab/logs:/var/log/gitlab'
+    - '.gitlab/data:/var/opt/gitlab'
+```
+```
+iptables -A IN_public_allow -p tcp --dport 8929 -j ACCEPT
+iptables -A IN_public_allow -p tcp --dport 8922 -j ACCEPT
+```
+
+编辑配置文件：
+
+`sudo docker exec -it gitlab /bin/bash`
+
+```
+vi /etc/gitlab/gitlab.rb
+vi /var/opt/gitlab/gitlab-rails/etc/gitlab.yml
+gitlab-ctl reconfigure
+gitlab-ctl restart
+```
+
+```
+gitlab_rails['gitlab_signup_enabled'] = false
+gitlab_rails['ldap_servers'] = YAML.load <<-'EOS'
+    main: # 'main' is the GitLab 'provider ID' of this LDAP server
+     label: 'LDAP'
+     host: '172.16.210.3'
+     port: 389
+     uid: 'uid'
+     method: 'plain' # "tls" or "ssl" or "plain"
+     bind_dn: 'cn=admin,dc=beagledata,dc=com'
+     password: 'Bxxxx'
+     active_directory: false
+     allow_username_or_email_login: false
+     block_auto_created_users: false
+     base: 'dc=beagledata,dc=com'
+     user_filter: ''
+     attributes:
+       username: ['uid', 'userid', 'sAMAccountName']
+       email:    ['uid', 'email', 'userPrincipalName']
+       name:       'cn'
+       first_name: 'givenName'
+       last_name:  'sn'
+     EOS
+```
+检查ldap配置：
+`RAILS_ENV=production gitlab-rake -v --trace gitlab:ldap:check`
+
+### Gitlab备份：
+    
+`docker exec -it gitlab-internal  gitlab-rake gitlab:backup:create`
+
+`docker exec -it gitlab-internal gitlab-rake gitlab:backup:restore BACKUP=1496887240`
+
