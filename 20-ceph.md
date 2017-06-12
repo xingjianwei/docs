@@ -399,11 +399,11 @@ Ceph 存储集群默认启用认证，你应该有个包含密钥的配置文件
 确保此文件对用户有合适的权限，但对其他用户不可见。
 ```
 sudo mkdir /mnt/mycephfs
-sudo mount -t ceph 192.168.0.1:6789:/ /mnt/mycephfs -o name=admin,secret=xxxx
+sudo mount -t ceph 172.16.210.121:6789:/ /mnt/cephfs -o name=admin,secret=xxxx
 ```
 
 ```
-sudo ceph-fuse -k ./ceph.client.admin.keyring -m 192.168.0.1:6789 ~/mycephfs
+sudo ceph-fuse -k ./ceph.client.admin.keyring -m 172.16.210.121:6789 /mnt/cephfs
 或者将配置文件和key拷贝到/etc/ceph目录下。
 ```
 

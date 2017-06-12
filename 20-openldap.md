@@ -17,7 +17,11 @@
  `ldapadd -x -D "cn=Manager,dc=beagledata,dc=com" -w Bxxxx -f  xxxx.ldif`
 
 ## GUI管理工具
-web管理-ldap-account-manager
+web管理-phpldapadmin
+
+下载phpldapadmin-1.2.3，使用php-5.4版本image。5.5开始函数不兼容。
+
+直接使用docker image，登录后左边cn无法显示中文。可能是iconv的问题。
 
 用web界面根下创建一个posix group  allmember，否则会出现gidnumber的问题。
 
@@ -31,11 +35,31 @@ home目录：默认值为邮件地址不符合要求，要删除@，目录名不
 ```
 
 
-## 自助密码修改-self-service-password：
+## 自助密码修改 self-service-password：
+
+下载self-service-password-1.0，使用php-5.4版本image。5.5开始自带password_hash函数。
+
+直接使用docker image，无法登录，提示用户名密码错误。可能是配置文件默认加密方法没有设置为`auto`的问题。
 
 ```
-docker pull grams/ltb-self-service-password:1.0
 docker pull dtwardow/ldap-self-service-password:latest
+docker run -d -p 443:80 \
+--link ldap-service:ldaphost \
+-e LDAP_HOST=ldap://ldaphost \
+-e LDAP_PORT=389 \
+-e LDAP_BASE='beagledata.com' \
+-e LDAP_USER='cn=admin,dc=beagledata,dc=com' \
+-e LDAP_PASS='Bxxxx' \
+-e LSSP_ATTR_MAIL=uid \
+-e SMTP_HOST=<mailserver-hostname> \
+[-e SMTP_PORT=25] \
+[-e SMTP_USER=<smtp-username>] \
+[-e SMTP_PASS=<smtp-password>] \
+[-e SMTP_TLS=on] \
+-e SERVER_HOSTNAME=ldap-self-service \
+-v $PWD/config.inc.php:/usr/share/self-service-password/conf/config.inc.php \
+--name ldap-self-service \
+dtwardow/ldap-self-service-password:latest
 ```
 
 ## 启动ldap server
