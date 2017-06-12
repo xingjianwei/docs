@@ -323,4 +323,18 @@ kubectl cluster-info
 
 也可以直接访问安全端口`http://172.16.210.101:8080/api/v1/proxy/namespaces/kube-system/services/kubernetes-dashboard`
 
+由于 kube-apiserver 开启了 RBAC 授权，而浏览器访问 kube-apiserver 的时候使用的是匿名证书，所以访问安全端口会导致授权失败。
+
+导入证书
+
+将生成的admin.pem证书转换格式
+
+```
+cd /etc/kubernetes/ssl
+openssl pkcs12 -export -in admin.pem  -out admin.p12 -inkey admin-key.pem
+```
+将生成的admin.p12证书导入的你的电脑(chrome->设置->高级->管理证书)；macos系统中在`钥匙串访问`中导入项目，导出的时候记住你设置的密码，导入的时候还要用到。
+
+如果不导入证书，需要使用**非安全**端口访问 kube-apiserver：
+
 
