@@ -251,10 +251,13 @@ mk-docker-opts.sh 脚本将分配给 flanneld 的 Pod 子网网段信息写入�
 
 [06-部署Master节点](file:///Users/xingjianwei/github/xingjianwei/follow-me-install-kubernetes-cluster/06-部署Master节点.md)
 
+[安全端口启动服务](http://www.cnblogs.com/yangxiaoyi/p/6921594.html)
+
 需要在开启kuber服务的节点上打开端口：
+```
 sudo firewall-cmd --zone=public --add-port=6443/tcp --permanent
-sudo firewall-cmd --zone=public --add-port=8080/tcp --permanent
 sudo firewall-cmd --reload
+```
 
 [07-部署Node节点](file:///Users/xingjianwei/github/xingjianwei/follow-me-install-kubernetes-cluster/07-部署Node节点.md)
 
@@ -270,7 +273,7 @@ scp docker/completion/bash/docker root@kuber-node2:/etc/bash_completion.d/
 在执行
 `iptables -F && sudo iptables -X && sudo iptables -F -t nat && sudo iptables -X -t nat`后，加上
 `iptables -P FORWARD ACCEPT`
-如果不加，会出现服务IP和节点IP ping不通的现象。
+如果不加，会出现服务IP和节点IP ping不通的现象，dashboard也无法启动。
 ```
 cat /etc/docker/daemon.json
 {
