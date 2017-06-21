@@ -16,7 +16,7 @@
 
 [nodejs](10-nodejs.md)
 
-[ogg][10-ogg.md]
+[ogg](10-ogg.md)
 
 ## 软件安装
 
