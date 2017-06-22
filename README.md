@@ -28,6 +28,8 @@
 
 [jenkins](20-jenkins.md) 
 
+[Nexus](20-Nexus.md)
+
 [ceph](20-ceph.md)
 
 [kubernetes](20-kubernetesInstall.md)
