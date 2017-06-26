@@ -340,4 +340,15 @@ openssl pkcs12 -export -in admin.pem  -out admin.p12 -inkey admin-key.pem
 
 如果不导入证书，需要使用**非安全**端口访问 kube-apiserver：
 
+## 访问地址
+harbor私有仓库：
+https://172.16.210.101
 
+Kubernetes Dashboard：
+https://172.16.210.101:6443/ui
+
+Grafana Dashboard：
+https://172.16.210.101:6443/api/v1/proxy/namespaces/kube-system/services/monitoring-grafana
+
+Kibana Dashboard：
+https://172.16.210.101:6443/api/v1/proxy/namespaces/kube-system/services/kibana-logging
