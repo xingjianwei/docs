@@ -70,6 +70,8 @@
 
 [CockroachDB中的SQL-将表数据映射为key-value存储](33-sql-in-cockroachdb.md)
 
+[Druid 白皮书](32-druid.md)
+
 ## 代码分析
 
 [CockroachDB源代码结构分析](40-CrdbCode.md)
